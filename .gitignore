@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-windows/
+src-tauri/target/
+*.zip
+.tauri/
+.DS_Store

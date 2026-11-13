@@ -1,0 +1,83 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ZunzShot",
+  "version": "1.0.1",
+  "identifier": "com.zunzshot.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": false,
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "ZunzShot",
+        "url": "index.html",
+        "width": 680,
+        "height": 620,
+        "minWidth": 560,
+        "minHeight": 520,
+        "resizable": true,
+        "center": true,
+        "visible": false
+      },
+      {
+        "label": "overlay",
+        "create": false,
+        "title": "ZunzShot Capture",
+        "url": "overlay.html",
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "shadow": false,
+        "visibleOnAllWorkspaces": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA3NTE3NjkxQjIxMjBBRTUKUldUbENoS3lrWFpSQjIyelpwZDJmckFIVU1oMVBhTVlXTkZ6eEJEZFpBU2RDV0NvUGtURWdnZXIK",
+      "endpoints": [
+        "https://github.com/ExtremeRayoX/ZunzShot/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.3",
+      "signingIdentity": "-",
+      "hardenedRuntime": false
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": false
+      },
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": ["English", "SpanishInternational"],
+        "installerHooks": "./windows/installer-hooks.nsh"
+      }
+    }
+  }
+}
