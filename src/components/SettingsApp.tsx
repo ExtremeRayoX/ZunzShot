@@ -81,8 +81,7 @@ export const SettingsApp: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [permCheckNote, setPermCheckNote] = useState<boolean>(false);
-  const [appVersion, setAppVersion] = useState<string>("1.0.1");
+  const [appVersion, setAppVersion] = useState<string>("1.0.2");
   const [tab, setTab] = useState<TabId>("capture");
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
@@ -189,9 +188,6 @@ export const SettingsApp: React.FC = () => {
     });
     const unlistenPerm = listen<boolean>("zunzshot://permission-updated", (ev) => {
       setHasPermission(ev.payload);
-      if (ev.payload) {
-        setPermCheckNote(false);
-      }
     });
     const unlistenUpd = listen<AppSettings>(
       "zunzshot://settings-updated",
@@ -224,10 +220,7 @@ export const SettingsApp: React.FC = () => {
   useEffect(() => {
     if (platform !== "macos" || hasPermission !== false) return;
     const recheck = () => {
-      void invoke<boolean>("check_screen_capture_permission").then((ok) => {
-        setHasPermission(ok);
-        if (ok) setPermCheckNote(false);
-      });
+      void invoke<boolean>("check_screen_capture_permission").then(setHasPermission);
     };
     window.addEventListener("focus", recheck);
     const timer = window.setInterval(recheck, 1500);
@@ -558,20 +551,7 @@ export const SettingsApp: React.FC = () => {
   // Strict macOS Screen Recording Permission Gate — block ALL app options until verified
   if (platform === "macos" && !hasPermission) {
     const handleRequestPerm = async () => {
-      setPermCheckNote(false);
       const ok = await invoke<boolean>("request_screen_capture_permission");
-      setHasPermission(ok);
-    };
-
-    const handleVerifyPerm = async () => {
-      const ok = await invoke<boolean>("check_screen_capture_permission");
-      setHasPermission(ok);
-      setPermCheckNote(!ok);
-    };
-
-    const handleRelinkPerm = async () => {
-      setPermCheckNote(false);
-      const ok = await invoke<boolean>("reset_screen_capture_permission");
       setHasPermission(ok);
     };
 
@@ -601,36 +581,7 @@ export const SettingsApp: React.FC = () => {
             >
               <ShieldCheck size={16} /> {t.permissionGate.requestBtn}
             </button>
-
-            <div className="permission-secondary-row">
-              <button
-                className="secondary-btn"
-                onClick={() => void handleVerifyPerm()}
-              >
-                <RefreshCw size={14} /> {t.permissionGate.verifyBtn}
-              </button>
-              <button
-                className="secondary-btn"
-                onClick={() => void invoke("restart_app")}
-              >
-                <RotateCcw size={14} /> {t.permissionGate.restartBtn}
-              </button>
-            </div>
-
-            <button
-              className="secondary-btn permission-relink-btn"
-              onClick={() => void handleRelinkPerm()}
-            >
-              <RotateCcw size={13} /> {t.permissionGate.relinkBtn}
-            </button>
           </div>
-
-          {permCheckNote && (
-            <div className="permission-warn-note">
-              <AlertTriangle size={14} />
-              <span>{t.permissionGate.stillBlockedMsg}</span>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1096,6 +1047,7 @@ export const SettingsApp: React.FC = () => {
                   ? "Windows"
                   : platform}
             </p>
+            <p className="credits-line">{t.aboutSection.creditsLabel}</p>
 
             <div className="update-box">
               <button

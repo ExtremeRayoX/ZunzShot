@@ -62,6 +62,14 @@ fn tcc_stamp_path(app: &AppHandle) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
+fn tcc_prompted_stamp_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("tcc-prompted-stamp.txt"))
+}
+
+#[cfg(target_os = "macos")]
 fn current_binary_stamp() -> String {
     let exe_meta = std::env::current_exe()
         .ok()
@@ -114,6 +122,9 @@ fn cleanup_stale_tcc_on_reinstall(app: &AppHandle) {
     if previous.as_deref() != Some(stamp.as_str()) {
         reset_macos_tcc_screen_capture();
         write_tcc_stamp(app, &stamp);
+        if let Some(p) = tcc_prompted_stamp_path(app) {
+            let _ = fs::remove_file(p);
+        }
     }
 }
 
@@ -1442,28 +1453,31 @@ fn check_screen_capture_permission(app: AppHandle) -> bool {
 fn request_screen_capture_permission(app: AppHandle) -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        let granted = objc2_core_graphics::CGRequestScreenCaptureAccess();
-        if !granted {
+        let stamp = current_binary_stamp();
+        let already_prompted = tcc_prompted_stamp_path(&app)
+            .and_then(|p| fs::read_to_string(p).ok())
+            .as_deref()
+            == Some(stamp.as_str());
+
+        if !already_prompted {
+            if let Some(p) = tcc_prompted_stamp_path(&app) {
+                if let Some(parent) = p.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let _ = fs::write(p, &stamp);
+            }
+            // Trigger macOS's native dialog ([Open System Settings] / [Deny]) alone so
+            // System Settings only opens when the user clicks the button in that prompt.
+            let _ = objc2_core_graphics::CGRequestScreenCaptureAccess();
+        } else {
+            // macOS only displays CGRequestScreenCaptureAccess() once per TCC entry;
+            // subsequent clicks open the Screen Recording pane directly.
             open_mac_screen_recording_pane()?;
         }
     }
     #[cfg(windows)]
     {
         // Windows does not gate desktop screen capture behind a privacy lock
-    }
-    Ok(sync_permission_state(&app))
-}
-
-#[tauri::command]
-fn reset_screen_capture_permission(app: AppHandle) -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        reset_macos_tcc_screen_capture();
-        write_tcc_stamp(&app, &current_binary_stamp());
-        let granted = objc2_core_graphics::CGRequestScreenCaptureAccess();
-        if !granted {
-            open_mac_screen_recording_pane()?;
-        }
     }
     Ok(sync_permission_state(&app))
 }
@@ -1601,7 +1615,6 @@ pub fn run() {
             open_screen_recording_settings,
             check_screen_capture_permission,
             request_screen_capture_permission,
-            reset_screen_capture_permission,
             restart_app,
             get_platform,
             get_app_version,

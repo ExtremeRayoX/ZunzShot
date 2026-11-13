@@ -70,3 +70,11 @@ Descarga el instalador más reciente para tu sistema operativo desde la sección
 | Compartir | `⌘ + ⇧ + E` | `Ctrl + Shift + E` |
 | Imprimir | `⌘ + P` | `Ctrl + P` |
 | Cerrar | `Esc` | `Esc` |
+
+---
+
+<div align="center">
+
+Desarrollado por **ERX**
+
+</div>

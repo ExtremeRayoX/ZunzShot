@@ -3,10 +3,10 @@ setlocal enabledelayedexpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 
-title Compilar ZunzShot v1.0.1 para Windows
+title Compilar ZunzShot v1.0.2 para Windows
 
 echo ========================================================
-echo   ZunzShot v1.0.1 - Compilador Automatico para Windows
+echo   ZunzShot v1.0.2 - Compilador Automatico para Windows
 echo ========================================================
 echo.
 
@@ -48,7 +48,7 @@ if errorlevel 1 goto :err_npm
 
 :: 6. Compilar frontend + Rust + instalador NSIS
 echo.
-echo [2/3] Compilando ZunzShot v1.0.1 ^(la primera vez puede tardar varios minutos^)...
+echo [2/3] Compilando ZunzShot v1.0.2 ^(la primera vez puede tardar varios minutos^)...
 echo       Tauri descargara NSIS si no esta en cache.
 echo.
 set "CFG_ARG="
@@ -77,7 +77,7 @@ for %%F in ("src-tauri\target\release\bundle\nsis\*.exe") do (
 
 echo.
 echo ========================================================
-echo   COMPILACION COMPLETADA EXITOSAMENTE - ZunzShot v1.0.1
+echo   COMPILACION COMPLETADA EXITOSAMENTE - ZunzShot v1.0.2
 echo ========================================================
 echo Archivos listos en: %~dp0dist-windows
 echo.
