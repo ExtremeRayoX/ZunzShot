@@ -15,7 +15,7 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - platform: macos-latest
+          - platform: macos-15-intel
             args: "--target universal-apple-darwin"
           - platform: windows-latest
             args: ""
@@ -35,7 +35,7 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ startsWith(matrix.platform, 'macos-') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
