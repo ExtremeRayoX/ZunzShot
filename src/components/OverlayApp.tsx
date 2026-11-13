@@ -259,6 +259,22 @@ export const OverlayApp: React.FC = () => {
 
   const [captureMode, setCaptureMode] = useState<CaptureMode>("region");
   const [selection, setSelection] = useState<SelectionBox | null>(null);
+  const selectionRef = useRef<SelectionBox | null>(null);
+
+  const updateSelection = useCallback(
+    (
+      next:
+        | SelectionBox
+        | null
+        | ((prev: SelectionBox | null) => SelectionBox | null)
+    ) => {
+      const resolved =
+        typeof next === "function" ? next(selectionRef.current) : next;
+      selectionRef.current = resolved;
+      setSelection(resolved);
+    },
+    []
+  );
   const [hoveredWin, setHoveredWin] = useState<WindowCandidate | null>(null);
   const [activeTool, setActiveTool] = useState<ToolType>("select");
   const [activeColor, setActiveColor] = useState<string>("#ef4444");
@@ -449,14 +465,14 @@ export const OverlayApp: React.FC = () => {
       setActiveTool("select");
 
       if (meta.mode === "fullscreen") {
-        setSelection({ x: 0, y: 0, w: vw, h: vh, shape: "rect" });
+        updateSelection({ x: 0, y: 0, w: vw, h: vh, shape: "rect" });
       } else {
-        setSelection(null);
+        updateSelection(null);
       }
     } catch (err) {
       console.error("Failed loading capture session:", err);
     }
-  }, []);
+  }, [updateSelection]);
 
   useEffect(() => {
     void loadActiveSession();
@@ -484,7 +500,9 @@ export const OverlayApp: React.FC = () => {
 
   const handleClose = useCallback(async () => {
     sessionOpenRef.current = false;
-    setSelection(null);
+    copyInFlightRef.current = false;
+    dragRef.current = { kind: "none" };
+    updateSelection(null);
     setHistory({ past: [], present: [], future: [] });
     setDraftItem(null);
     setTextInput(null);
@@ -498,8 +516,8 @@ export const OverlayApp: React.FC = () => {
       prev?.close();
       return null;
     });
-    await invoke("close_overlay");
-  }, []);
+    await invoke("close_overlay").catch(() => {});
+  }, [updateSelection]);
 
   const samplePixelHex = useCallback(
     (px: number, py: number): string | null => {
@@ -815,38 +833,75 @@ export const OverlayApp: React.FC = () => {
     lang,
   ]);
 
-  const exportCurrentPng = useCallback(async (): Promise<Uint8Array | null> => {
-    if (!bitmap || !metadata || !selection) return null;
-    return renderExportPngBytes(
-      bitmap,
-      viewport.w,
-      viewport.h,
-      selection,
-      items,
-      metadata.capturedAtIso,
-      lang
-    );
-  }, [bitmap, metadata, viewport, selection, items, lang]);
+  const exportCurrentPng = useCallback(
+    async (selectionOverride?: SelectionBox): Promise<Uint8Array | null> => {
+      const activeSel = selectionOverride ?? selectionRef.current ?? selection;
+      if (!bitmap || !metadata || !activeSel) return null;
+      return renderExportPngBytes(
+        bitmap,
+        viewport.w,
+        viewport.h,
+        activeSel,
+        items,
+        metadata.capturedAtIso,
+        lang
+      );
+    },
+    [bitmap, metadata, selection, viewport, items, lang]
+  );
 
-  const handleCopy = useCallback(async () => {
-    if (copyInFlightRef.current) return;
-    copyInFlightRef.current = true;
-    try {
-      const bytes = await exportCurrentPng();
-      if (!bytes) return;
-      await invoke("copy_image_to_clipboard", bytes);
-      const subtitle = selection
-        ? `${Math.round(selection.w)} × ${Math.round(selection.h)} px`
-        : "";
-      await invoke("show_copy_notification", {
-        title: t.overlay.copiedMsg,
-        subtitle,
-      }).catch(() => {});
-      await handleClose();
-    } finally {
-      copyInFlightRef.current = false;
-    }
-  }, [exportCurrentPng, selection, t.overlay.copiedMsg, handleClose]);
+  const handleCopy = useCallback(
+    async (selectionOverride?: SelectionBox) => {
+      if (copyInFlightRef.current) return;
+      copyInFlightRef.current = true;
+      const activeSel = selectionOverride ?? selectionRef.current ?? selection;
+      try {
+        const bytes = await exportCurrentPng(activeSel ?? undefined);
+        if (!bytes) {
+          if (captureMode === "quickCopy") {
+            updateSelection(null);
+          }
+          return;
+        }
+        await invoke("copy_image_to_clipboard", bytes);
+        if (!sessionOpenRef.current) return;
+        const subtitle = activeSel
+          ? `${Math.round(activeSel.w)} × ${Math.round(activeSel.h)} px`
+          : "";
+        await invoke("show_copy_notification", {
+          title: t.overlay.copiedMsg,
+          subtitle,
+          closeOverlay: true,
+        }).catch(() => {});
+        await handleClose();
+      } catch (err) {
+        console.error("Failed copying screenshot:", err);
+        if (!sessionOpenRef.current) return;
+        if (captureMode === "quickCopy") {
+          updateSelection(null);
+        }
+        showToastMsg(
+          lang === "es"
+            ? "No se pudo copiar al portapapeles. Inténtalo de nuevo."
+            : "Could not copy to clipboard. Please try again.",
+          true,
+          3200
+        );
+      } finally {
+        copyInFlightRef.current = false;
+      }
+    },
+    [
+      exportCurrentPng,
+      selection,
+      captureMode,
+      updateSelection,
+      t.overlay.copiedMsg,
+      handleClose,
+      showToastMsg,
+      lang,
+    ]
+  );
 
   const handleSave = useCallback(async () => {
     const bytes = await exportCurrentPng();
@@ -1170,7 +1225,7 @@ export const OverlayApp: React.FC = () => {
             )
           );
         } else if (selection) {
-          setSelection((prev) =>
+          updateSelection((prev) =>
             prev
               ? clampSelection(
                   { ...prev, x: prev.x + dx, y: prev.y + dy },
@@ -1268,7 +1323,7 @@ export const OverlayApp: React.FC = () => {
 
     // 1. Window mode: click locks hovered window
     if (!selection && captureMode === "window" && hoveredWin) {
-      setSelection({
+      updateSelection({
         x: hoveredWin.rx * viewport.w,
         y: hoveredWin.ry * viewport.h,
         w: hoveredWin.rw * viewport.w,
@@ -1289,7 +1344,7 @@ export const OverlayApp: React.FC = () => {
         startY: py,
         shape,
       };
-      setSelection({ x: px, y: py, w: 1, h: 1, shape });
+      updateSelection({ x: px, y: py, w: 1, h: 1, shape });
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
@@ -1450,7 +1505,7 @@ export const OverlayApp: React.FC = () => {
       }
       const x = px >= drag.startX ? drag.startX : drag.startX - w;
       const y = py >= drag.startY ? drag.startY : drag.startY - h;
-      setSelection(clampSelection({ x, y, w, h, shape: drag.shape }, viewport.w, viewport.h));
+      updateSelection(clampSelection({ x, y, w, h, shape: drag.shape }, viewport.w, viewport.h));
       return;
     }
 
@@ -1482,7 +1537,7 @@ export const OverlayApp: React.FC = () => {
         }
       }
 
-      setSelection(clampSelection(next, viewport.w, viewport.h));
+      updateSelection(clampSelection(next, viewport.w, viewport.h));
       return;
     }
 
@@ -1594,13 +1649,14 @@ export const OverlayApp: React.FC = () => {
       setLoupeInfo(null);
     }
 
-    if (drag.kind === "creating-selection" && selection) {
-      if (selection.w < 12 || selection.h < 12) {
-        setSelection(null);
+    if (drag.kind === "creating-selection") {
+      const currentSel = selectionRef.current ?? selection;
+      if (!currentSel || currentSel.w < 12 || currentSel.h < 12) {
+        updateSelection(null);
         return;
       }
       if (captureMode === "quickCopy") {
-        void handleCopy();
+        void handleCopy(currentSel);
       }
       return;
     }
@@ -1917,6 +1973,7 @@ export const OverlayApp: React.FC = () => {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onPointerLeave={() => setLoupeInfo(null)}
       />
 
@@ -1968,7 +2025,7 @@ export const OverlayApp: React.FC = () => {
               onClick={() => {
                 setCaptureMode("fullscreen");
                 setLoupeInfo(null);
-                setSelection({
+                updateSelection({
                   x: 0,
                   y: 0,
                   w: viewport.w,
@@ -1995,6 +2052,20 @@ export const OverlayApp: React.FC = () => {
                 : captureMode === "window"
                   ? t.overlay.hintWindow
                   : t.overlay.hintRegion}
+          </div>
+        </div>
+      )}
+
+      {selection && captureMode === "quickCopy" && (
+        <div className="top-mode-bar">
+          <div className="mode-pills">
+            <button
+              className="mode-pill cancel"
+              onClick={() => void handleClose()}
+              title={t.overlay.cancel}
+            >
+              <X size={14} /> {t.overlay.cancel}
+            </button>
           </div>
         </div>
       )}
@@ -2200,7 +2271,7 @@ export const OverlayApp: React.FC = () => {
                 className={`tool-btn ${selection.shape === "circle" ? "sticker-accent" : ""}`}
                 onClick={() => {
                   setActivePopover(null);
-                  setSelection((prev) =>
+                  updateSelection((prev) =>
                     prev
                       ? {
                           ...prev,

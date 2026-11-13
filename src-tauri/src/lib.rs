@@ -650,8 +650,8 @@ fn apply_native_overlay_window(
     {
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
-            SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-            SWP_SHOWWINDOW,
+            SetForegroundWindow, SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE,
+            SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
         };
 
         if let Ok(hwnd) = ov.hwnd() {
@@ -672,6 +672,7 @@ fn apply_native_overlay_window(
                         phys_h as i32,
                         SWP_SHOWWINDOW,
                     );
+                    let _ = SetForegroundWindow(hwnd);
                     let _ = ov.set_focus();
                 } else {
                     let _ = SetWindowPos(
@@ -736,6 +737,53 @@ fn set_overlay_elevated(app: AppHandle, elevated: bool) {
     }
 }
 
+fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destroy_ov: bool) {
+    if let Some(ov) = app_handle.get_webview_window("overlay") {
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = ov.hwnd() {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::WindowsAndMessaging::{
+                SetWindowPos, HWND_NOTOPMOST, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
+                SWP_NOSIZE,
+            };
+            unsafe {
+                let _ = SetWindowPos(
+                    HWND(hwnd.0),
+                    Some(HWND_NOTOPMOST),
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW,
+                );
+            }
+        }
+        let _ = ov.hide();
+        if destroy_ov {
+            let _ = ov.destroy();
+        }
+    }
+    // Re-assert pinned floating windows above normal apps once the fullscreen overlay is gone
+    for pin_id in pin_ids {
+        if let Some(pin_win) = app_handle.get_webview_window(pin_id) {
+            #[cfg(target_os = "macos")]
+            if let Ok(ptr) = pin_win.ns_window() {
+                if !ptr.is_null() {
+                    let ns_pin = unsafe { &*(ptr as *const objc2_app_kit::NSWindow) };
+                    ns_pin.setHidesOnDeactivate(false);
+                    ns_pin.setLevel(5);
+                    ns_pin.orderFrontRegardless();
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = pin_win.set_always_on_top(true);
+                let _ = pin_win.show();
+            }
+        }
+    }
+}
+
 #[tauri::command]
 fn close_overlay(app: AppHandle, state: State<'_, Mutex<AppState>>) {
     *LAST_OVERLAY_RECT.lock().unwrap() = None;
@@ -749,31 +797,7 @@ fn close_overlay(app: AppHandle, state: State<'_, Mutex<AppState>>) {
     };
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        if let Some(ov) = app_handle.get_webview_window("overlay") {
-            let _ = ov.hide();
-            if ultra_light {
-                let _ = ov.destroy();
-            }
-        }
-        // Re-assert pinned floating windows above normal apps once the fullscreen overlay is gone
-        for pin_id in pin_ids {
-            if let Some(pin_win) = app_handle.get_webview_window(&pin_id) {
-                #[cfg(target_os = "macos")]
-                if let Ok(ptr) = pin_win.ns_window() {
-                    if !ptr.is_null() {
-                        let ns_pin = unsafe { &*(ptr as *const objc2_app_kit::NSWindow) };
-                        ns_pin.setHidesOnDeactivate(false);
-                        ns_pin.setLevel(5);
-                        ns_pin.orderFrontRegardless();
-                    }
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    let _ = pin_win.set_always_on_top(true);
-                    let _ = pin_win.show();
-                }
-            }
-        }
+        hide_overlay_on_main_thread(&app_handle, &pin_ids, ultra_light);
     });
 }
 
@@ -792,6 +816,25 @@ fn decode_hex_utf8(hex_str: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+fn with_clipboard_retry<T>(
+    mut op: impl FnMut(&mut Clipboard) -> Result<T, String>,
+) -> Result<T, String> {
+    let mut last_err = String::new();
+    for attempt in 0..8 {
+        match Clipboard::new().map_err(|e| format!("Clipboard error: {e}")) {
+            Ok(mut cb) => match op(&mut cb) {
+                Ok(val) => return Ok(val),
+                Err(err) => last_err = err,
+            },
+            Err(err) => last_err = err,
+        }
+        if attempt < 7 {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+    Err(last_err)
+}
+
 fn copy_png_bytes_to_clipboard(png_bytes: &[u8]) -> Result<(), String> {
     let decoded = image::load_from_memory_with_format(png_bytes, image::ImageFormat::Png)
         .map_err(|e| format!("Failed to decode PNG: {e}"))?
@@ -801,16 +844,15 @@ fn copy_png_bytes_to_clipboard(png_bytes: &[u8]) -> Result<(), String> {
     let height = decoded.height() as usize;
     let raw = decoded.into_raw();
 
-    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;
-    clipboard
-        .set_image(ImageData {
-            width,
-            height,
-            bytes: Cow::Borrowed(&raw),
-        })
-        .map_err(|e| format!("Failed to copy image: {e}"))?;
-
-    Ok(())
+    with_clipboard_retry(|clipboard| {
+        clipboard
+            .set_image(ImageData {
+                width,
+                height,
+                bytes: Cow::Borrowed(&raw),
+            })
+            .map_err(|e| format!("Failed to copy image: {e}"))
+    })
 }
 
 #[tauri::command]
@@ -824,10 +866,11 @@ fn copy_image_to_clipboard(request: Request<'_>) -> Result<(), String> {
 
 #[tauri::command]
 fn copy_text_to_clipboard(text: String) -> Result<(), String> {
-    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard error: {e}"))?;
-    clipboard
-        .set_text(text)
-        .map_err(|e| format!("Failed to copy text: {e}"))
+    with_clipboard_retry(|clipboard| {
+        clipboard
+            .set_text(&text)
+            .map_err(|e| format!("Failed to copy text: {e}"))
+    })
 }
 
 fn encode_query_component(input: &str) -> String {
@@ -848,7 +891,23 @@ fn encode_query_component(input: &str) -> String {
 }
 
 #[tauri::command]
-fn show_copy_notification(app: AppHandle, title: String, subtitle: String) {
+fn show_copy_notification(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    title: String,
+    subtitle: String,
+    close_overlay: Option<bool>,
+) {
+    let should_close = close_overlay.unwrap_or(false);
+    let pin_ids: Vec<String> = if should_close {
+        *LAST_OVERLAY_RECT.lock().unwrap() = None;
+        let mut guard = state.lock().unwrap();
+        guard.active_session = None;
+        guard.pinned_images.keys().cloned().collect()
+    } else {
+        Vec::new()
+    };
+
     let gen = NEXT_TOAST_ID.fetch_add(1, Ordering::Relaxed);
     let toast_id = format!("copy-toast-{gen}");
     let prev_id = if gen > 1 {
@@ -875,6 +934,11 @@ fn show_copy_notification(app: AppHandle, title: String, subtitle: String) {
     let app_handle = app.clone();
     let id_for_create = toast_id.clone();
     let _ = app.run_on_main_thread(move || {
+        // Hide the fullscreen overlay BEFORE creating the toast window so the desktop
+        // becomes responsive immediately on Windows even before WebView2 initializes the toast.
+        if should_close {
+            hide_overlay_on_main_thread(&app_handle, &pin_ids, false);
+        }
         if let Some(old_id) = prev_id {
             if let Some(old_win) = app_handle.get_webview_window(&old_id) {
                 let _ = old_win.close();
