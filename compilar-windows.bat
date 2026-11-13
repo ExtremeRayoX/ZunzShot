@@ -49,7 +49,7 @@ if errorlevel 1 goto :err_npm
 :: 6. Compilar frontend + Rust + instalador NSIS
 echo.
 echo [2/3] Compilando ZunzShot v1.0.1 ^(la primera vez puede tardar varios minutos^)...
-echo       Tauri descargara NSIS y WebView2 offlineInstaller ^(~150 MB^) si no estan en cache.
+echo       Tauri descargara NSIS si no esta en cache.
 echo.
 set "CFG_ARG="
 if defined TAURI_SIGNING_PRIVATE_KEY goto :has_signing_key

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-windows/
+dist-offline/
 src-tauri/target/
 *.zip
 .tauri/

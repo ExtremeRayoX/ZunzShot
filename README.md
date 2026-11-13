@@ -12,7 +12,7 @@
 
 <br />
 
-[**⬇️ Descargar para Windows (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Descargar para macOS (.dmg)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
+[**⬇️ Descargar para Windows (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Windows Offline (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Descargar para macOS (.dmg)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
 
 </div>
 
@@ -24,7 +24,8 @@ Descarga el instalador más reciente para tu sistema operativo desde la sección
 
 | Plataforma | Archivo recomendado | Notas de instalación |
 | :--- | :--- | :--- |
-| **Windows 10 / 11 (64-bit)** | `ZunzShot_*_x64-setup.exe` | Ejecuta el instalador, elige tu idioma (**Español / English**) y queda listo con actualizaciones automáticas. |
+| **Windows 10 / 11 (Ligero — recomendado)** | `ZunzShot_*_x64-setup.exe` | Instalador liviano (usa WebView2 del sistema o lo descarga si falta). Elige tu idioma (**Español / English**) y recibe actualizaciones automáticas. |
+| **Windows 10 / 11 (Offline completo)** | `ZunzShot_*_x64-offline-setup.exe` | Incluye todo lo necesario para instalar sin conexión a internet (mismas funciones y actualizaciones automáticas). |
 | **macOS 12.3+ (Apple Silicon & Intel)** | `ZunzShot_*_universal.dmg` | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:

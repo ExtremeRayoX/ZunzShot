@@ -70,7 +70,7 @@
     },
     "windows": {
       "webviewInstallMode": {
-        "type": "offlineInstaller",
+        "type": "downloadBootstrapper",
         "silent": false
       },
       "nsis": {
