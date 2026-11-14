@@ -58,40 +58,37 @@ impl Drop for CaptureInProgressGuard {
 }
 
 #[cfg(target_os = "windows")]
+static MAIN_BUILD_LOCK: std::sync::LazyLock<Mutex<()>> =
+    std::sync::LazyLock::new(|| Mutex::new(()));
+#[cfg(target_os = "windows")]
+static OVERLAY_BUILD_LOCK: std::sync::LazyLock<Mutex<()>> =
+    std::sync::LazyLock::new(|| Mutex::new(()));
+
+#[cfg(target_os = "windows")]
 fn force_windows_foreground_and_webview_focus(win: &tauri::WebviewWindow) {
     use windows::Win32::Foundation::HWND;
-    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
-    use windows::Win32::UI::Input::KeyboardAndMouse::{SetActiveWindow, SetFocus};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
-        ShowWindow, SW_SHOW,
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP,
     };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, IsWindowVisible, SetForegroundWindow,
+    };
+
+    if !win.is_visible().unwrap_or(false) {
+        return;
+    }
 
     if let Ok(raw_hwnd) = win.hwnd() {
         let hwnd = HWND(raw_hwnd.0);
         unsafe {
-            let fg_hwnd = GetForegroundWindow();
-            let fg_tid = if !fg_hwnd.0.is_null() {
-                GetWindowThreadProcessId(fg_hwnd, None)
-            } else {
-                0
-            };
-            let cur_tid = GetCurrentThreadId();
-            let attached = if fg_tid != 0 && fg_tid != cur_tid {
-                AttachThreadInput(cur_tid, fg_tid, true).as_bool()
-            } else {
-                false
-            };
-
-            let _ = ShowWindow(hwnd, SW_SHOW);
+            if !IsWindowVisible(hwnd).as_bool() {
+                return;
+            }
+            // Synthesize a no-op extended key release instead of AttachThreadInput so we never
+            // couple our message queue to an unresponsive or elevated external window thread.
+            keybd_event(0, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
             let _ = BringWindowToTop(hwnd);
             let _ = SetForegroundWindow(hwnd);
-            let _ = SetActiveWindow(hwnd);
-            let _ = SetFocus(Some(hwnd));
-
-            if attached {
-                let _ = AttachThreadInput(cur_tid, fg_tid, false);
-            }
         }
     }
     let _ = win.set_focus();
@@ -421,8 +418,10 @@ fn get_failed_shortcuts(state: State<'_, Mutex<AppState>>) -> Vec<String> {
 
 fn attach_main_close_handler(app: &AppHandle, win: &WebviewWindow) {
     let app_for_close = app.clone();
+    #[cfg(target_os = "windows")]
+    let win_for_close = win.clone();
     win.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { .. } = event {
+        if let WindowEvent::CloseRequested { api, .. } = event {
             // Only re-register shortcuts if Settings was closed mid-recording while paused.
             if SHORTCUTS_PAUSED.load(Ordering::SeqCst) {
                 let current = app_for_close
@@ -432,6 +431,44 @@ fn attach_main_close_handler(app: &AppHandle, win: &WebviewWindow) {
                     .settings
                     .clone();
                 register_shortcuts(&app_for_close, &current);
+            }
+            #[cfg(target_os = "windows")]
+            if !ALLOW_APP_EXIT.load(Ordering::Relaxed) {
+                let ultra_light = app_for_close
+                    .state::<Mutex<AppState>>()
+                    .lock()
+                    .unwrap()
+                    .settings
+                    .ultra_light_mode;
+                if !ultra_light {
+                    api.prevent_close();
+                    let _ = win_for_close.hide();
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            let _ = api;
+        }
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn attach_overlay_close_handler(app: &AppHandle, win: &WebviewWindow) {
+    let app_for_close = app.clone();
+    win.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            if !ALLOW_APP_EXIT.load(Ordering::Relaxed) {
+                api.prevent_close();
+                *LAST_OVERLAY_RECT.lock().unwrap() = None;
+                let (ultra_light, pin_ids): (bool, Vec<String>) = {
+                    let st = app_for_close.state::<Mutex<AppState>>();
+                    let mut guard = st.lock().unwrap();
+                    guard.active_session = None;
+                    (
+                        guard.settings.ultra_light_mode,
+                        guard.pinned_images.keys().cloned().collect(),
+                    )
+                };
+                hide_overlay_on_main_thread(&app_for_close, &pin_ids, ultra_light);
             }
         }
     });
@@ -450,32 +487,83 @@ fn focus_settings_window(win: &WebviewWindow) {
 }
 
 fn show_settings_window(app: &AppHandle) {
-    let app_handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = app_handle.get_webview_window("main") {
-            let _ = win.show();
-            let _ = win.unminimize();
-            focus_settings_window(&win);
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(win) = app.get_webview_window("main") {
+            let _ = app.run_on_main_thread(move || {
+                let _ = win.show();
+                let _ = win.unminimize();
+                focus_settings_window(&win);
+            });
             return;
         }
 
-        let cfg = app_handle
-            .config()
-            .app
-            .windows
-            .iter()
-            .find(|w| w.label == "main")
-            .cloned();
-
-        if let Some(cfg) = cfg {
-            if let Ok(builder) = WebviewWindowBuilder::from_config(&app_handle, &cfg) {
-                if let Ok(win) = builder.visible(true).build() {
-                    attach_main_close_handler(&app_handle, &win);
+        // Build WebView2 windows off the main thread so WebviewWindowBuilder::build() never
+        // re-enters a synchronous COM/IPC pump on the UI thread.
+        let app_handle = app.clone();
+        std::thread::spawn(move || {
+            let _build_guard = MAIN_BUILD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(win) = app_handle.get_webview_window("main") {
+                let _ = app_handle.run_on_main_thread(move || {
+                    let _ = win.show();
+                    let _ = win.unminimize();
                     focus_settings_window(&win);
+                });
+                return;
+            }
+
+            let cfg = app_handle
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned();
+
+            if let Some(cfg) = cfg {
+                if let Ok(builder) = WebviewWindowBuilder::from_config(&app_handle, &cfg) {
+                    if let Ok(win) = builder.visible(true).build() {
+                        attach_main_close_handler(&app_handle, &win);
+                        let _ = app_handle.run_on_main_thread(move || {
+                            let _ = win.show();
+                            let _ = win.unminimize();
+                            focus_settings_window(&win);
+                        });
+                    }
                 }
             }
-        }
-    });
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let app_handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Some(win) = app_handle.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                focus_settings_window(&win);
+                return;
+            }
+
+            let cfg = app_handle
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned();
+
+            if let Some(cfg) = cfg {
+                if let Ok(builder) = WebviewWindowBuilder::from_config(&app_handle, &cfg) {
+                    if let Ok(win) = builder.visible(true).build() {
+                        attach_main_close_handler(&app_handle, &win);
+                        focus_settings_window(&win);
+                    }
+                }
+            }
+        });
+    }
 }
 
 fn open_settings_tab(app: &AppHandle, tab: &str) {
@@ -488,19 +576,42 @@ fn open_settings_tab(app: &AppHandle, tab: &str) {
 }
 
 fn ensure_overlay_window(app: &AppHandle) -> Option<WebviewWindow> {
-    if let Some(ov) = app.get_webview_window("overlay") {
-        return Some(ov);
+    #[cfg(target_os = "windows")]
+    {
+        let _build_guard = OVERLAY_BUILD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ov) = app.get_webview_window("overlay") {
+            return Some(ov);
+        }
+        let cfg = app
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|w| w.label == "overlay")
+            .cloned()?;
+        let win = WebviewWindowBuilder::from_config(app, &cfg)
+            .ok()
+            .and_then(|b| b.visible(false).build().ok())?;
+        attach_overlay_close_handler(app, &win);
+        Some(win)
     }
-    let cfg = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|w| w.label == "overlay")
-        .cloned()?;
-    WebviewWindowBuilder::from_config(app, &cfg)
-        .ok()
-        .and_then(|b| b.visible(false).build().ok())
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(ov) = app.get_webview_window("overlay") {
+            return Some(ov);
+        }
+        let cfg = app
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|w| w.label == "overlay")
+            .cloned()?;
+        WebviewWindowBuilder::from_config(app, &cfg)
+            .ok()
+            .and_then(|b| b.visible(false).build().ok())
+    }
 }
 
 fn trigger_capture(app: AppHandle, mode: String) {
@@ -546,6 +657,12 @@ fn trigger_capture(app: AppHandle, mode: String) {
 
     std::thread::spawn(move || {
         let _capture_guard = CaptureInProgressGuard;
+
+        *LAST_OVERLAY_RECT.lock().unwrap() = None;
+        {
+            let state = app.state::<Mutex<AppState>>();
+            state.lock().unwrap().active_session = None;
+        }
 
         if let Some(ov) = app.get_webview_window("overlay") {
             let _ = ov.emit("zunzshot://session-reset", ());
@@ -595,6 +712,11 @@ fn trigger_capture(app: AppHandle, mode: String) {
                     let state = app.state::<Mutex<AppState>>();
                     let mut guard = state.lock().unwrap();
                     guard.active_session = Some(session);
+                }
+
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = ensure_overlay_window(&app);
                 }
 
                 present_overlay_window(
@@ -678,6 +800,9 @@ fn save_settings_cmd(
         if !has_active_session {
             let app_handle = app.clone();
             let _ = app.run_on_main_thread(move || {
+                #[cfg(target_os = "windows")]
+                hide_overlay_on_main_thread(&app_handle, &[], true);
+                #[cfg(not(target_os = "windows"))]
                 if let Some(ov) = app_handle.get_webview_window("overlay") {
                     let _ = ov.hide();
                     let _ = ov.destroy();
@@ -686,9 +811,16 @@ fn save_settings_cmd(
         }
     } else {
         let app_handle = app.clone();
-        let _ = app.run_on_main_thread(move || {
+        #[cfg(target_os = "windows")]
+        std::thread::spawn(move || {
             let _ = ensure_overlay_window(&app_handle);
         });
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = app.run_on_main_thread(move || {
+                let _ = ensure_overlay_window(&app_handle);
+            });
+        }
     }
 
     refresh_tray_menu(&app);
@@ -905,8 +1037,8 @@ fn apply_native_overlay_window(
     {
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
-            SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-            SWP_SHOWWINDOW,
+            SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_HIDEWINDOW, SWP_NOACTIVATE,
+            SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
         };
 
         if let Ok(hwnd) = ov.hwnd() {
@@ -930,6 +1062,8 @@ fn apply_native_overlay_window(
                     );
                 }
             } else {
+                // Temporarily hide the fullscreen overlay on Windows so native dialogs
+                // (Save As, Print, Explorer) are never covered if the user clicks outside them.
                 unsafe {
                     let _ = SetWindowPos(
                         hwnd,
@@ -938,9 +1072,10 @@ fn apply_native_overlay_window(
                         0,
                         0,
                         0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW,
                     );
                 }
+                let _ = ov.hide();
             }
             if elevated {
                 force_windows_foreground_and_webview_focus(ov);
@@ -951,7 +1086,15 @@ fn apply_native_overlay_window(
                         std::thread::sleep(Duration::from_millis(wait_ms));
                         let ov_main = ov_delayed.clone();
                         let _ = ov_delayed.run_on_main_thread(move || {
-                            if ov_main.is_visible().unwrap_or(false) {
+                            let has_rect = LAST_OVERLAY_RECT.lock().unwrap().is_some();
+                            let has_session = ov_main
+                                .app_handle()
+                                .state::<Mutex<AppState>>()
+                                .lock()
+                                .unwrap()
+                                .active_session
+                                .is_some();
+                            if has_rect && has_session && ov_main.is_visible().unwrap_or(false) {
                                 force_windows_foreground_and_webview_focus(&ov_main);
                                 let _ = ov_main.emit("zunzshot://focus-canvas", ());
                             }
@@ -990,15 +1133,70 @@ fn present_overlay_window(
 ) {
     let (phys_x, phys_y, phys_w, phys_h) = rect;
     *LAST_OVERLAY_RECT.lock().unwrap() = Some(rect);
-    let app_handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        if let Some(win) = app_handle
-            .get_webview_window("overlay")
-            .or_else(|| ensure_overlay_window(&app_handle))
-        {
-            apply_native_overlay_window(&win, phys_x, phys_y, phys_w, phys_h, elevated, emit_ready);
+
+    #[cfg(target_os = "windows")]
+    {
+        if app.get_webview_window("overlay").is_none() {
+            if !elevated {
+                return;
+            }
+            let app_handle = app.clone();
+            std::thread::spawn(move || {
+                if let Some(win) = ensure_overlay_window(&app_handle) {
+                    let app_inner = app_handle.clone();
+                    let _ = app_handle.run_on_main_thread(move || {
+                        let has_rect = LAST_OVERLAY_RECT.lock().unwrap().is_some();
+                        let has_session = app_inner
+                            .state::<Mutex<AppState>>()
+                            .lock()
+                            .unwrap()
+                            .active_session
+                            .is_some();
+                        if has_rect && has_session {
+                            apply_native_overlay_window(
+                                &win, phys_x, phys_y, phys_w, phys_h, elevated, emit_ready,
+                            );
+                        }
+                    });
+                }
+            });
+            return;
         }
-    });
+
+        let app_handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if elevated {
+                let has_rect = LAST_OVERLAY_RECT.lock().unwrap().is_some();
+                let has_session = app_handle
+                    .state::<Mutex<AppState>>()
+                    .lock()
+                    .unwrap()
+                    .active_session
+                    .is_some();
+                if !has_rect || !has_session {
+                    return;
+                }
+            }
+            if let Some(win) = app_handle.get_webview_window("overlay") {
+                apply_native_overlay_window(
+                    &win, phys_x, phys_y, phys_w, phys_h, elevated, emit_ready,
+                );
+            }
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let app_handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Some(win) = app_handle
+                .get_webview_window("overlay")
+                .or_else(|| ensure_overlay_window(&app_handle))
+            {
+                apply_native_overlay_window(&win, phys_x, phys_y, phys_w, phys_h, elevated, emit_ready);
+            }
+        });
+    }
 }
 
 #[tauri::command]
@@ -1015,6 +1213,19 @@ fn set_overlay_elevated(app: AppHandle, elevated: bool) {
 fn focus_overlay_window(app: AppHandle) {
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
+        #[cfg(target_os = "windows")]
+        {
+            let has_rect = LAST_OVERLAY_RECT.lock().unwrap().is_some();
+            let has_session = app_handle
+                .state::<Mutex<AppState>>()
+                .lock()
+                .unwrap()
+                .active_session
+                .is_some();
+            if !has_rect || !has_session {
+                return;
+            }
+        }
         if let Some(ov) = app_handle.get_webview_window("overlay") {
             if ov.is_visible().unwrap_or(false) {
                 #[cfg(target_os = "windows")]
@@ -1053,7 +1264,35 @@ fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destr
         }
         let _ = ov.hide();
         if destroy_ov {
-            let _ = ov.destroy();
+            #[cfg(target_os = "windows")]
+            {
+                // Defer WebView2 teardown off the synchronous WebResourceRequested IPC stack.
+                let app_destroy = app_handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(60));
+                    let app_inner = app_destroy.clone();
+                    let _ = app_destroy.run_on_main_thread(move || {
+                        let can_destroy = {
+                            let has_rect = LAST_OVERLAY_RECT.lock().unwrap().is_some();
+                            let st = app_inner.state::<Mutex<AppState>>();
+                            let guard = st.lock().unwrap();
+                            !has_rect
+                                && guard.active_session.is_none()
+                                && guard.settings.ultra_light_mode
+                                && !CAPTURE_IN_PROGRESS.load(Ordering::SeqCst)
+                        };
+                        if can_destroy {
+                            if let Some(ov_win) = app_inner.get_webview_window("overlay") {
+                                let _ = ov_win.destroy();
+                            }
+                        }
+                    });
+                });
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let _ = ov.destroy();
+            }
         }
     }
     // Re-assert pinned floating windows above normal apps once the fullscreen overlay is gone
@@ -1238,6 +1477,84 @@ fn show_copy_notification(
 
     let app_handle = app.clone();
     let id_for_create = toast_id.clone();
+
+    #[cfg(target_os = "windows")]
+    {
+        if should_close {
+            let app_hide = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                hide_overlay_on_main_thread(&app_hide, &pin_ids, ultra_light);
+            });
+        }
+
+        std::thread::spawn(move || {
+            let _ = mon_phys_h;
+            if let Some(old_id) = prev_id {
+                if let Some(old_win) = app_handle.get_webview_window(&old_id) {
+                    let _ = old_win.close();
+                }
+            }
+
+            if let Ok(win) = WebviewWindowBuilder::new(
+                &app_handle,
+                &id_for_create,
+                WebviewUrl::App(url.into()),
+            )
+            .title("ZunzShot")
+            .decorations(false)
+            .transparent(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .shadow(false)
+            .focused(false)
+            .inner_size(toast_w, toast_h)
+            .position(toast_x, toast_y)
+            .visible(false)
+            .build()
+            {
+                let phys_toast_x = mon_phys_x
+                    + (((mon_phys_w as f64 - toast_w * sc) / 2.0).max(0.0)).round() as i32;
+                let phys_toast_y = mon_phys_y + (38.0 * sc).round() as i32;
+                let phys_toast_w = (toast_w * sc).round().max(1.0) as i32;
+                let phys_toast_h = (toast_h * sc).round().max(1.0) as i32;
+
+                let win_for_show = win.clone();
+                let _ = win.run_on_main_thread(move || {
+                    use windows::Win32::Foundation::HWND;
+                    use windows::Win32::UI::WindowsAndMessaging::{
+                        SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
+                    };
+
+                    let _ = win_for_show.set_ignore_cursor_events(true);
+                    if let Ok(hwnd) = win_for_show.hwnd() {
+                        unsafe {
+                            let _ = SetWindowPos(
+                                HWND(hwnd.0),
+                                Some(HWND_TOPMOST),
+                                phys_toast_x,
+                                phys_toast_y,
+                                phys_toast_w,
+                                phys_toast_h,
+                                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                            );
+                        }
+                    }
+                });
+
+                std::thread::sleep(Duration::from_millis(1850));
+                let app_for_close = app_handle.clone();
+                let id_for_close = id_for_create.clone();
+                let _ = app_handle.run_on_main_thread(move || {
+                    if let Some(w) = app_for_close.get_webview_window(&id_for_close) {
+                        let _ = w.close();
+                    }
+                });
+            }
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
     let _ = app.run_on_main_thread(move || {
         let _ = (mon_phys_h, mon_phys_w, sc, toast_w, toast_h);
         // Hide the fullscreen overlay BEFORE creating the toast window so the desktop
@@ -1298,35 +1615,7 @@ fn show_copy_notification(
                 }
             }
 
-            #[cfg(target_os = "windows")]
-            {
-                use windows::Win32::Foundation::HWND;
-                use windows::Win32::UI::WindowsAndMessaging::{
-                    SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
-                };
-
-                let phys_toast_x = mon_phys_x
-                    + (((mon_phys_w as f64 - toast_w * sc) / 2.0).max(0.0)).round() as i32;
-                let phys_toast_y = mon_phys_y + (38.0 * sc).round() as i32;
-                let phys_toast_w = (toast_w * sc).round().max(1.0) as i32;
-                let phys_toast_h = (toast_h * sc).round().max(1.0) as i32;
-                if let Ok(hwnd) = win.hwnd() {
-                    let hwnd = HWND(hwnd.0);
-                    unsafe {
-                        let _ = SetWindowPos(
-                            hwnd,
-                            Some(HWND_TOPMOST),
-                            phys_toast_x,
-                            phys_toast_y,
-                            phys_toast_w,
-                            phys_toast_h,
-                            SWP_NOACTIVATE | SWP_SHOWWINDOW,
-                        );
-                    }
-                }
-            }
-
-            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            #[cfg(not(target_os = "macos"))]
             {
                 let _ = win.show();
             }
@@ -1629,25 +1918,42 @@ fn print_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
         if let Some(rect) = *LAST_OVERLAY_RECT.lock().unwrap() {
             present_overlay_window(&app, rect, false, false);
         }
         let app_handle = app.clone();
         std::thread::spawn(move || {
             let escaped = temp_path.to_string_lossy().replace('\'', "''");
+            let script = format!(
+                "try {{ Start-Process -FilePath '{escaped}' -Verb Print -Wait -ErrorAction Stop }} catch {{ Start-Process -FilePath 'mspaint.exe' -ArgumentList @('/p', '{escaped}') -ErrorAction Stop }}"
+            );
             let status = std::process::Command::new("powershell")
+                .creation_flags(CREATE_NO_WINDOW)
                 .args([
                     "-NoProfile",
+                    "-NonInteractive",
+                    "-Sta",
                     "-WindowStyle",
                     "Hidden",
                     "-Command",
-                    &format!("Start-Process -FilePath '{escaped}' -Verb Print"),
+                    &script,
                 ])
                 .status();
             let ok = status.map(|s| s.success()).unwrap_or(false);
             if !ok {
-                if let Some(rect) = *LAST_OVERLAY_RECT.lock().unwrap() {
-                    present_overlay_window(&app_handle, rect, true, false);
+                let has_session = app_handle
+                    .state::<Mutex<AppState>>()
+                    .lock()
+                    .unwrap()
+                    .active_session
+                    .is_some();
+                if has_session {
+                    if let Some(rect) = *LAST_OVERLAY_RECT.lock().unwrap() {
+                        present_overlay_window(&app_handle, rect, true, false);
+                    }
                 }
             }
             let _ = app_handle.emit("zunzshot://print-result", ok);
@@ -1713,135 +2019,177 @@ fn pin_capture(
     let fallback_x = mon_phys_x as f64 / sc + clamped_x;
     let fallback_y = mon_phys_y as f64 / sc + clamped_y;
 
-    let app_handle = app.clone();
-    let id_for_win = pin_id.clone();
-    let _ = app.run_on_main_thread(move || {
-        #[allow(unused_mut)]
-        let mut top_left_x = fallback_x;
-        #[allow(unused_mut)]
-        let mut top_left_y = fallback_y;
-        #[allow(unused_mut)]
-        let mut win_w = w;
-        #[allow(unused_mut)]
-        let mut win_h = h;
-        #[cfg(target_os = "macos")]
-        let mut cocoa_frame_opt: Option<objc2_foundation::NSRect> = None;
-
-        #[cfg(target_os = "macos")]
-        {
-            use objc2::MainThreadMarker;
-            use objc2_app_kit::{NSScreen, NSWindow};
-            use objc2_foundation::{NSPoint, NSRect, NSSize};
-
-            if let Some(mtm) = MainThreadMarker::new() {
-                let screens = NSScreen::screens(mtm);
-                let primary_h = if !screens.is_empty() {
-                    screens.objectAtIndex(0).frame().size.height
-                } else {
-                    mon_h.max(900.0)
-                };
-
-                if let Some(ov_frame) = app_handle
-                    .get_webview_window("overlay")
-                    .and_then(|ov| ov.ns_window().ok())
-                    .filter(|ptr| !ptr.is_null())
-                    .map(|ptr| unsafe { (*(ptr as *const NSWindow)).frame() })
-                {
-                    win_w = sel_w.min(ov_frame.size.width.max(64.0));
-                    win_h = sel_h.min(ov_frame.size.height.max(48.0));
-                    let cx = sel_x.clamp(0.0, (ov_frame.size.width - win_w).max(0.0));
-                    let cy = sel_y.clamp(0.0, (ov_frame.size.height - win_h).max(0.0));
-                    let cocoa_x = ov_frame.origin.x + cx;
-                    let cocoa_y = ov_frame.origin.y + ov_frame.size.height - (cy + win_h);
-                    top_left_x = cocoa_x;
-                    top_left_y = primary_h - (cocoa_y + win_h);
-                    cocoa_frame_opt = Some(NSRect::new(
-                        NSPoint::new(cocoa_x, cocoa_y),
-                        NSSize::new(win_w, win_h),
-                    ));
-                } else {
-                    let cocoa_y = primary_h - (fallback_y + win_h);
-                    cocoa_frame_opt = Some(NSRect::new(
-                        NSPoint::new(fallback_x, cocoa_y),
-                        NSSize::new(win_w, win_h),
-                    ));
-                }
-            }
-        }
-
-        let url = format!("pin.html?id={id_for_win}&lang={lang}");
-        match WebviewWindowBuilder::new(&app_handle, &id_for_win, WebviewUrl::App(url.into()))
-            .title("ZunzShot Pin")
-            .decorations(false)
-            .transparent(true)
-            .always_on_top(true)
-            .resizable(true)
-            .skip_taskbar(true)
-            .shadow(true)
-            .inner_size(win_w, win_h)
-            .min_inner_size(64.0, 48.0)
-            .position(top_left_x, top_left_y)
-            .visible(false)
-            .build()
-        {
-            Ok(win) => {
-                #[cfg(target_os = "macos")]
-                {
-                    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-
-                    if let Ok(ns_win_ptr) = win.ns_window() {
-                        if !ns_win_ptr.is_null() {
-                            let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
-                            // Must disable hidesOnDeactivate under ActivationPolicy::Accessory so the
-                            // pinned screenshot stays floating when switching to any other macOS app.
-                            ns_win.setHidesOnDeactivate(false);
-                            ns_win.setCollectionBehavior(
-                                NSWindowCollectionBehavior::CanJoinAllSpaces
-                                    | NSWindowCollectionBehavior::FullScreenAuxiliary,
-                            );
-                            ns_win.setLevel(5);
-                            if let Some(frame) = cocoa_frame_opt {
-                                ns_win.setFrame_display(frame, true);
-                            }
-                            let _ = win.show();
-                            ns_win.orderFrontRegardless();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = (sel_x, sel_y, sel_w, sel_h, mon_w, mon_h);
+        let app_handle = app.clone();
+        let id_for_win = pin_id.clone();
+        std::thread::spawn(move || {
+            let url = format!("pin.html?id={id_for_win}&lang={lang}");
+            match WebviewWindowBuilder::new(&app_handle, &id_for_win, WebviewUrl::App(url.into()))
+                .title("ZunzShot Pin")
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .resizable(true)
+                .skip_taskbar(true)
+                .shadow(true)
+                .inner_size(w, h)
+                .min_inner_size(64.0, 48.0)
+                .position(fallback_x, fallback_y)
+                .visible(false)
+                .build()
+            {
+                Ok(win) => {
+                    let app_for_destroy = app_handle.clone();
+                    let id_for_destroy = id_for_win.clone();
+                    win.on_window_event(move |event| {
+                        if let WindowEvent::Destroyed = event {
+                            let st = app_for_destroy.state::<Mutex<AppState>>();
+                            st.lock().unwrap().pinned_images.remove(&id_for_destroy);
                         }
-                    }
-                }
-                #[cfg(target_os = "windows")]
-                {
+                    });
                     let phys_pin_x = mon_phys_x + (clamped_x * sc).round() as i32;
                     let phys_pin_y = mon_phys_y + (clamped_y * sc).round() as i32;
                     let phys_pin_w = (w * sc).round().max(64.0) as u32;
                     let phys_pin_h = (h * sc).round().max(48.0) as u32;
-                    let _ = win.set_position(Position::Physical(PhysicalPosition::new(
-                        phys_pin_x, phys_pin_y,
-                    )));
-                    let _ = win.set_size(Size::Physical(PhysicalSize::new(
-                        phys_pin_w, phys_pin_h,
-                    )));
-                    let _ = win.show();
+                    let win_for_show = win.clone();
+                    let _ = win.run_on_main_thread(move || {
+                        let _ = win_for_show.set_position(Position::Physical(
+                            PhysicalPosition::new(phys_pin_x, phys_pin_y),
+                        ));
+                        let _ = win_for_show
+                            .set_size(Size::Physical(PhysicalSize::new(phys_pin_w, phys_pin_h)));
+                        let _ = win_for_show.show();
+                    });
                 }
-                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-                {
-                    let _ = win.show();
+                Err(err) => {
+                    eprintln!("Failed creating pin window {id_for_win}: {err}");
+                    let st = app_handle.state::<Mutex<AppState>>();
+                    st.lock().unwrap().pinned_images.remove(&id_for_win);
                 }
-                let app_for_destroy = app_handle.clone();
-                let id_for_destroy = id_for_win.clone();
-                win.on_window_event(move |event| {
-                    if let WindowEvent::Destroyed = event {
-                        let st = app_for_destroy.state::<Mutex<AppState>>();
-                        st.lock().unwrap().pinned_images.remove(&id_for_destroy);
+            }
+        });
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let app_handle = app.clone();
+        let id_for_win = pin_id.clone();
+        let _ = app.run_on_main_thread(move || {
+            #[allow(unused_mut)]
+            let mut top_left_x = fallback_x;
+            #[allow(unused_mut)]
+            let mut top_left_y = fallback_y;
+            #[allow(unused_mut)]
+            let mut win_w = w;
+            #[allow(unused_mut)]
+            let mut win_h = h;
+            #[cfg(target_os = "macos")]
+            let mut cocoa_frame_opt: Option<objc2_foundation::NSRect> = None;
+
+            #[cfg(target_os = "macos")]
+            {
+                use objc2::MainThreadMarker;
+                use objc2_app_kit::{NSScreen, NSWindow};
+                use objc2_foundation::{NSPoint, NSRect, NSSize};
+
+                if let Some(mtm) = MainThreadMarker::new() {
+                    let screens = NSScreen::screens(mtm);
+                    let primary_h = if !screens.is_empty() {
+                        screens.objectAtIndex(0).frame().size.height
+                    } else {
+                        mon_h.max(900.0)
+                    };
+
+                    if let Some(ov_frame) = app_handle
+                        .get_webview_window("overlay")
+                        .and_then(|ov| ov.ns_window().ok())
+                        .filter(|ptr| !ptr.is_null())
+                        .map(|ptr| unsafe { (*(ptr as *const NSWindow)).frame() })
+                    {
+                        win_w = sel_w.min(ov_frame.size.width.max(64.0));
+                        win_h = sel_h.min(ov_frame.size.height.max(48.0));
+                        let cx = sel_x.clamp(0.0, (ov_frame.size.width - win_w).max(0.0));
+                        let cy = sel_y.clamp(0.0, (ov_frame.size.height - win_h).max(0.0));
+                        let cocoa_x = ov_frame.origin.x + cx;
+                        let cocoa_y = ov_frame.origin.y + ov_frame.size.height - (cy + win_h);
+                        top_left_x = cocoa_x;
+                        top_left_y = primary_h - (cocoa_y + win_h);
+                        cocoa_frame_opt = Some(NSRect::new(
+                            NSPoint::new(cocoa_x, cocoa_y),
+                            NSSize::new(win_w, win_h),
+                        ));
+                    } else {
+                        let cocoa_y = primary_h - (fallback_y + win_h);
+                        cocoa_frame_opt = Some(NSRect::new(
+                            NSPoint::new(fallback_x, cocoa_y),
+                            NSSize::new(win_w, win_h),
+                        ));
                     }
-                });
+                }
             }
-            Err(err) => {
-                eprintln!("Failed creating pin window {id_for_win}: {err}");
-                let st = app_handle.state::<Mutex<AppState>>();
-                st.lock().unwrap().pinned_images.remove(&id_for_win);
+
+            let url = format!("pin.html?id={id_for_win}&lang={lang}");
+            match WebviewWindowBuilder::new(&app_handle, &id_for_win, WebviewUrl::App(url.into()))
+                .title("ZunzShot Pin")
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .resizable(true)
+                .skip_taskbar(true)
+                .shadow(true)
+                .inner_size(win_w, win_h)
+                .min_inner_size(64.0, 48.0)
+                .position(top_left_x, top_left_y)
+                .visible(false)
+                .build()
+            {
+                Ok(win) => {
+                    #[cfg(target_os = "macos")]
+                    {
+                        use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+                        if let Ok(ns_win_ptr) = win.ns_window() {
+                            if !ns_win_ptr.is_null() {
+                                let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
+                                // Must disable hidesOnDeactivate under ActivationPolicy::Accessory so the
+                                // pinned screenshot stays floating when switching to any other macOS app.
+                                ns_win.setHidesOnDeactivate(false);
+                                ns_win.setCollectionBehavior(
+                                    NSWindowCollectionBehavior::CanJoinAllSpaces
+                                        | NSWindowCollectionBehavior::FullScreenAuxiliary,
+                                );
+                                ns_win.setLevel(5);
+                                if let Some(frame) = cocoa_frame_opt {
+                                    ns_win.setFrame_display(frame, true);
+                                }
+                                let _ = win.show();
+                                ns_win.orderFrontRegardless();
+                            }
+                        }
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let _ = win.show();
+                    }
+                    let app_for_destroy = app_handle.clone();
+                    let id_for_destroy = id_for_win.clone();
+                    win.on_window_event(move |event| {
+                        if let WindowEvent::Destroyed = event {
+                            let st = app_for_destroy.state::<Mutex<AppState>>();
+                            st.lock().unwrap().pinned_images.remove(&id_for_destroy);
+                        }
+                    });
+                }
+                Err(err) => {
+                    eprintln!("Failed creating pin window {id_for_win}: {err}");
+                    let st = app_handle.state::<Mutex<AppState>>();
+                    st.lock().unwrap().pinned_images.remove(&id_for_win);
+                }
             }
-        }
-    });
+        });
+    }
 
     Ok(pin_id)
 }
@@ -2079,6 +2427,26 @@ fn trigger_update_sensor(app: &AppHandle, initial_delay_secs: u64) {
     });
 }
 
+fn quit_application(app: &AppHandle) {
+    SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+    ALLOW_APP_EXIT.store(true, Ordering::SeqCst);
+    signal_update_sensor();
+    let _ = app.global_shortcut().unregister_all();
+    *LAST_OVERLAY_RECT.lock().unwrap() = None;
+    {
+        let state = app.state::<Mutex<AppState>>();
+        let mut guard = state.lock().unwrap();
+        guard.active_session = None;
+        let _ = guard.tray.take();
+    }
+    #[cfg(target_os = "windows")]
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_millis(250));
+        std::process::exit(0);
+    });
+    app.exit(0);
+}
+
 #[tauri::command]
 fn get_platform() -> &'static str {
     #[cfg(target_os = "macos")]
@@ -2205,10 +2573,7 @@ pub fn run() {
                 .on_menu_event(|app, event| {
                     let id = event.id().as_ref();
                     if id == "quit" {
-                        SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
-                        signal_update_sensor();
-                        ALLOW_APP_EXIT.store(true, Ordering::Relaxed);
-                        app.exit(0);
+                        quit_application(app);
                         return;
                     }
                     if id == "grant_permission" || !sync_permission_state(app) {
@@ -2246,7 +2611,17 @@ pub fn run() {
 
             // Pre-create the capture overlay for instant 0ms response unless Ultra-Light Mode is enabled.
             if !initial_settings.ultra_light_mode {
-                let _ = ensure_overlay_window(app.handle());
+                #[cfg(target_os = "windows")]
+                {
+                    let ov_handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        let _ = ensure_overlay_window(&ov_handle);
+                    });
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = ensure_overlay_window(app.handle());
+                }
             }
 
             // Lazily create the Settings window only when onboarding or permission prompt is required;

@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::Serialize;
 use tauri::AppHandle;
-use xcap::{Monitor, Window};
+use xcap::Monitor;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -152,13 +152,14 @@ fn select_matching_xcap_monitor(
         .or_else(|| monitors.first())
 }
 
+#[cfg(not(target_os = "windows"))]
 fn collect_windows_on_monitor(
     mon_x: f64,
     mon_y: f64,
     mon_w: f64,
     mon_h: f64,
 ) -> Vec<WindowCandidate> {
-    let Ok(all_windows) = Window::all() else {
+    let Ok(all_windows) = xcap::Window::all() else {
         return Vec::new();
     };
 
@@ -220,6 +221,207 @@ fn collect_windows_on_monitor(
             rw: iw / mon_w,
             rh: ih / mon_h,
         });
+    }
+
+    result
+}
+
+#[cfg(target_os = "windows")]
+fn collect_windows_on_monitor(
+    mon_x: f64,
+    mon_y: f64,
+    mon_w: f64,
+    mon_h: f64,
+) -> Vec<WindowCandidate> {
+    collect_windows_on_monitor_windows(mon_x, mon_y, mon_w, mon_h)
+}
+
+#[cfg(target_os = "windows")]
+fn collect_windows_on_monitor_windows(
+    mon_x: f64,
+    mon_y: f64,
+    mon_w: f64,
+    mon_h: f64,
+) -> Vec<WindowCandidate> {
+    use std::collections::HashMap;
+    use std::ffi::c_void;
+    use std::mem;
+    use std::path::Path;
+    use windows::core::{BOOL, PWSTR};
+    use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, RECT, TRUE};
+    use windows::Win32::Graphics::Dwm::{
+        DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
+    };
+    use windows::Win32::System::Threading::{
+        GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetClassNameW, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
+        InternalGetWindowText, IsHungAppWindow, IsIconic, IsWindow, IsWindowVisible, GWL_EXSTYLE,
+        WS_EX_TOOLWINDOW,
+    };
+
+    unsafe extern "system" fn enum_hwnds_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let list = unsafe { &mut *(lparam.0 as *mut Vec<HWND>) };
+        list.push(hwnd);
+        TRUE
+    }
+
+    fn process_app_name(pid: u32) -> String {
+        unsafe {
+            let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+                return String::new();
+            };
+            let mut buf = [0u16; 512];
+            let mut size = buf.len() as u32;
+            let ok = QueryFullProcessImageNameW(
+                handle,
+                PROCESS_NAME_WIN32,
+                PWSTR(buf.as_mut_ptr()),
+                &mut size,
+            )
+            .is_ok();
+            let _ = CloseHandle(handle);
+            if !ok || size == 0 {
+                return String::new();
+            }
+            let full = String::from_utf16_lossy(&buf[..size as usize]);
+            Path::new(&full)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default()
+                .to_string()
+        }
+    }
+
+    let mut hwnds: Vec<HWND> = Vec::with_capacity(128);
+    let enum_res = unsafe { EnumWindows(Some(enum_hwnds_proc), LPARAM(&raw mut hwnds as isize)) };
+    if enum_res.is_err() {
+        return Vec::new();
+    }
+
+    let own_pid = unsafe { GetCurrentProcessId() };
+    let mut pid_names: HashMap<u32, String> = HashMap::new();
+    let mut result = Vec::new();
+
+    for hwnd in hwnds {
+        unsafe {
+            if !IsWindow(Some(hwnd)).as_bool()
+                || !IsWindowVisible(hwnd).as_bool()
+                || IsIconic(hwnd).as_bool()
+            {
+                continue;
+            }
+
+            // Exclude our own windows and any hung external app BEFORE any UI/DWM queries
+            let mut pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid == 0 || pid == own_pid || IsHungAppWindow(hwnd).as_bool() {
+                continue;
+            }
+
+            let mut cloaked: u32 = 0;
+            if DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED,
+                (&raw mut cloaked).cast::<c_void>(),
+                mem::size_of::<u32>() as u32,
+            )
+            .is_ok()
+                && cloaked != 0
+            {
+                continue;
+            }
+
+            let mut class_buf = [0u16; 256];
+            let class_len = GetClassNameW(hwnd, &mut class_buf);
+            if class_len <= 0 {
+                continue;
+            }
+            let class_name = String::from_utf16_lossy(&class_buf[..class_len as usize]);
+            if class_name == "Progman" || class_name == "WorkerW" || class_name == "Button" {
+                continue;
+            }
+
+            let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as usize;
+            if (ex_style & (WS_EX_TOOLWINDOW.0 as usize)) != 0 && class_name != "Shell_TrayWnd" {
+                continue;
+            }
+
+            let mut rect = RECT::default();
+            let got_dwm = DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                (&raw mut rect).cast::<c_void>(),
+                mem::size_of::<RECT>() as u32,
+            )
+            .is_ok();
+            if !got_dwm && GetWindowRect(hwnd, &mut rect).is_err() {
+                continue;
+            }
+
+            let wx = rect.left as f64;
+            let wy = rect.top as f64;
+            let ww = (rect.right - rect.left) as f64;
+            let wh = (rect.bottom - rect.top) as f64;
+            if ww < 36.0 || wh < 36.0 {
+                continue;
+            }
+
+            // Compute intersection with the active monitor before reading window title/process name
+            let left = wx.max(mon_x);
+            let top = wy.max(mon_y);
+            let right = (wx + ww).min(mon_x + mon_w);
+            let bottom = (wy + wh).min(mon_y + mon_h);
+
+            let iw = right - left;
+            let ih = bottom - top;
+            if iw < 30.0 || ih < 30.0 {
+                continue;
+            }
+
+            // InternalGetWindowText reads directly from user32 without sending blocking WM_GETTEXT
+            let mut title_buf = [0u16; 512];
+            let title_len = InternalGetWindowText(hwnd, &mut title_buf);
+            let title = if title_len > 0 {
+                String::from_utf16_lossy(&title_buf[..title_len as usize])
+            } else {
+                String::new()
+            };
+
+            if iw >= mon_w * 0.99 && ih >= mon_h * 0.99 && title.is_empty() {
+                continue;
+            }
+
+            let app_name = pid_names
+                .entry(pid)
+                .or_insert_with(|| process_app_name(pid))
+                .clone();
+
+            let lower_app = app_name.to_lowercase();
+            if lower_app.contains("zunzshot")
+                || lower_app == "window server"
+                || lower_app == "dock"
+                || title == "ZunzShot Capture"
+            {
+                continue;
+            }
+
+            result.push(WindowCandidate {
+                id: hwnd.0 as usize as u32,
+                title: if title.is_empty() {
+                    app_name.clone()
+                } else {
+                    title
+                },
+                app_name,
+                rx: (left - mon_x) / mon_w,
+                ry: (top - mon_y) / mon_h,
+                rw: iw / mon_w,
+                rh: ih / mon_h,
+            });
+        }
     }
 
     result

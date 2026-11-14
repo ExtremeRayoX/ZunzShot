@@ -503,7 +503,7 @@ export const OverlayApp: React.FC = () => {
   }, [clearCanvasBuffers, updateSelection]);
 
   // Load current capture session from Rust
-  const loadActiveSession = useCallback(async () => {
+  const loadActiveSession = useCallback(async (fromSessionReady = false) => {
     const token = ++activeSessionTokenRef.current;
     setSessionReady(false);
     clearCanvasBuffers();
@@ -515,7 +515,12 @@ export const OverlayApp: React.FC = () => {
       ]);
       if (token !== activeSessionTokenRef.current) return;
       setSettings(cfg);
-      if (!meta) return;
+      if (!meta) {
+        if (fromSessionReady) {
+          void invoke("close_overlay").catch(() => {});
+        }
+        return;
+      }
 
       const buf = await invoke<ArrayBuffer>("get_capture_rgba");
       if (token !== activeSessionTokenRef.current) return;
@@ -576,13 +581,16 @@ export const OverlayApp: React.FC = () => {
       });
     } catch (err) {
       console.error("Failed loading capture session:", err);
+      if (fromSessionReady && token === activeSessionTokenRef.current) {
+        void invoke("close_overlay").catch(() => {});
+      }
     }
   }, [clearCanvasBuffers, focusOverlayCanvas, updateSelection]);
 
   useEffect(() => {
-    void loadActiveSession();
+    void loadActiveSession(false);
     const unlistenReady = listen("zunzshot://session-ready", () => {
-      void loadActiveSession();
+      void loadActiveSession(true);
     });
     const unlistenReset = listen("zunzshot://session-reset", () => {
       activeSessionTokenRef.current += 1;
@@ -595,7 +603,10 @@ export const OverlayApp: React.FC = () => {
       "zunzshot://switch-mode",
       (ev) => {
         const nextMode = ev.payload;
-        if (!sessionOpenRef.current) return;
+        if (!sessionOpenRef.current) {
+          void loadActiveSession(true);
+          return;
+        }
         setCaptureMode(nextMode);
         setTextInput(null);
         setActivePopover(null);
@@ -1099,7 +1110,7 @@ export const OverlayApp: React.FC = () => {
         ],
       });
     } finally {
-      if (sessionOpenRef.current) {
+      if (sessionOpenRef.current && (!picked || runtimePlatform !== "windows")) {
         await invoke("set_overlay_elevated", { elevated: true });
       }
     }
@@ -1112,10 +1123,24 @@ export const OverlayApp: React.FC = () => {
         },
       });
     } catch {
+      if (runtimePlatform === "windows" && sessionOpenRef.current) {
+        await invoke("set_overlay_elevated", { elevated: true }).catch(() => {});
+      }
       showToastMsg(t.overlay.saveErrorMsg, true, 2800);
       return;
     }
-    showToastMsg(`${t.overlay.savedMsg} ${picked.split(/[\\/]/).pop()}`, false, 0);
+    const savedName = picked.split(/[\\/]/).pop() ?? "";
+    if (runtimePlatform === "windows") {
+      activeSessionTokenRef.current += 1;
+      resetOverlayState();
+      await invoke("show_copy_notification", {
+        title: t.overlay.savedMsg,
+        subtitle: savedName,
+        closeOverlay: true,
+      }).catch(() => invoke("close_overlay").catch(() => {}));
+      return;
+    }
+    showToastMsg(`${t.overlay.savedMsg} ${savedName}`, false, 0);
     setTimeout(() => {
       setToast(null);
       void handleClose();
@@ -1128,6 +1153,8 @@ export const OverlayApp: React.FC = () => {
     t.overlay.savedMsg,
     t.overlay.saveErrorMsg,
     handleClose,
+    resetOverlayState,
+    runtimePlatform,
     showToastMsg,
   ]);
 
