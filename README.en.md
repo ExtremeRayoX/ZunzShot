@@ -10,28 +10,28 @@
 
 **Instant, ultra-lightweight, and creative screenshot tool for macOS and Windows.**
 
-[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v106)
-[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v106)
+[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v107)
+[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v107)
 [![Spanish README](https://img.shields.io/badge/Language-English_%7C_Espa%C3%B1ol-6366f1?style=for-the-badge)](README.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.6 for Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.7 for Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.6 for macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.7 for macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Downloads (`v1.0.6`)
+## Downloads (`v1.0.7`)
 
-Latest available version: **ZunzShot v1.0.6**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
+Latest available version: **ZunzShot v1.0.7**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
 
-| OS | Platform | Direct Download (`v1.0.6`) | Details |
+| OS | Platform | Direct Download (`v1.0.7`) | Details |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.6 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.6 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.7 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.7 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
 
 > **macOS note:** If Gatekeeper shows an unverified developer prompt on first launch, **right-click → Open** on the app in Applications or run in Terminal:
 > ```bash
@@ -112,6 +112,11 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 ---
 
 ## Release Notes
+
+### `v1.0.7`
+- **Comprehensive Windows stability after captures and commands:** Offloaded WebView2 window creation and teardown to background threads to eliminate UI freezes when opening the overlay, copy toasts, pinned (`Pin`) captures, or Settings.
+- **Non-blocking window detection on Windows:** Replaced blocking window enumeration with a direct Win32/DWM enumeration pipeline that skips unresponsive windows (`IsHungAppWindow`) and reads window titles without cross-process deadlocks, while keeping macOS untouched.
+- **Native dialogs & clean taskbar/tray exit on Windows:** Automatically hides the fullscreen overlay while native *Save*, *Print*, or *Share* dialogs are open so they are never covered, streamlines silent printing, and ensures clean window closing and immediate process exit from the taskbar or system tray.
 
 ### `v1.0.6`
 - **Editable rich text annotations:** Placed text labels can now be selected, moved, arrow-nudged, re-edited via **double-click**, and styled live (while typing or selected) with a **background toggle** (*With bg* / *No bg*), **bold (`B`)**, **italic (`I`)**, font size (`A-` / `A+`), and quick color controls without adding overhead.

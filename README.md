@@ -10,28 +10,28 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v106)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v106)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v107)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v107)
 [![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.6 para Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.7 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.6 para macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.7 para macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas (`v1.0.6`)
+## Descargas (`v1.0.7`)
 
-Versión actual disponible: **ZunzShot v1.0.6**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.0.7**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa (`v1.0.6`) | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.0.7`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.6 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.6 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.7 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.7 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -112,6 +112,11 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ---
 
 ## Notas de Versión
+
+### `v1.0.7`
+- **Estabilidad integral en Windows tras capturas y comandos:** Creación y gestión asíncrona de ventanas WebView2 en hilos secundarios para eliminar congelamientos al abrir el selector, notificaciones de copiado, capturas fijadas (`Pin`) o la ventana de Ajustes.
+- **Detección de ventanas sin bloqueos en Windows:** Reemplazo del escaneo bloqueante por enumeración nativa Win32/DWM con descarte inmediato de ventanas del sistema que no responden (`IsHungAppWindow`) y lectura de títulos sin bloqueo, manteniendo intacto el flujo de macOS.
+- **Diálogos nativos y cierre limpio desde la barra de tareas:** Ocultación temporal del selector en Windows al abrir diálogos de *Guardar*, *Imprimir* o *Compartir* para evitar que queden detrás del lienzo, impresión directa sin procesos huérfanos y cierre inmediato desde la barra de tareas o el menú de bandeja.
 
 ### `v1.0.6`
 - **Texto enriquecido editable y configurable:** Los textos añadidos sobre la captura ahora pueden seleccionarse, moverse, ajustarse con flechas del teclado, volver a editarse con **doble clic** y personalizarse en vivo (mientras escribes o al seleccionarlos) con alternador **Con fondo / Sin fondo**, **negrita (`B`)**, **cursiva (`I`)**, tamaño (`A-` / `A+`) y paleta de color sin impacto en el peso de la app.
