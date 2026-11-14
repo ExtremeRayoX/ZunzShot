@@ -85,6 +85,9 @@ impl Drop for CaptureInProgressGuard {
 static MAIN_BUILD_LOCK: std::sync::LazyLock<Mutex<()>> =
     std::sync::LazyLock::new(|| Mutex::new(()));
 #[cfg(target_os = "windows")]
+static UPDATER_BUILD_LOCK: std::sync::LazyLock<Mutex<()>> =
+    std::sync::LazyLock::new(|| Mutex::new(()));
+#[cfg(target_os = "windows")]
 static OVERLAY_BUILD_LOCK: std::sync::LazyLock<Mutex<()>> =
     std::sync::LazyLock::new(|| Mutex::new(()));
 
@@ -119,6 +122,20 @@ fn force_windows_foreground_and_webview_focus(win: &tauri::WebviewWindow) {
     let _ = AsRef::<tauri::Webview<_>>::as_ref(win).set_focus();
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingUpdatePreview {
+    pub version: String,
+    pub body: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdaterLaunchPayload {
+    pub mode: String,
+    pub preview: Option<PendingUpdatePreview>,
+}
+
 pub struct AppState {
     pub settings: AppSettings,
     pub active_session: Option<CaptureSession>,
@@ -126,9 +143,10 @@ pub struct AppState {
     pub shortcut_modes: HashMap<u32, String>,
     pub failed_shortcuts: Vec<String>,
     pub pending_tab: Option<String>,
+    pub pending_updater_launch: Option<UpdaterLaunchPayload>,
     pub pending_capture_error: Option<String>,
     pub pinned_images: HashMap<String, Vec<u8>>,
-    pub postponed_update: Option<(String, std::time::Instant)>,
+    pub postponed_update: Option<(String, std::time::Instant, u64)>,
     pub notified_update: Option<(String, std::time::Instant)>,
 }
 
@@ -510,10 +528,28 @@ fn focus_settings_window(win: &WebviewWindow) {
     }
 }
 
-fn show_settings_window(app: &AppHandle) {
+fn attach_updater_close_handler(app: &AppHandle, win: &WebviewWindow) {
+    let app_for_close = app.clone();
+    win.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { .. } = event {
+            if let Ok(mut guard) = app_for_close.state::<Mutex<AppState>>().lock() {
+                guard.pending_updater_launch = None;
+            }
+        }
+    });
+}
+
+fn show_configured_window<F>(
+    app: &AppHandle,
+    label: &'static str,
+    #[cfg(target_os = "windows")] build_lock: &'static Mutex<()>,
+    attach_close: F,
+) where
+    F: Fn(&AppHandle, &WebviewWindow) + Send + Sync + 'static,
+{
     #[cfg(target_os = "windows")]
     {
-        if let Some(win) = app.get_webview_window("main") {
+        if let Some(win) = app.get_webview_window(label) {
             let _ = app.run_on_main_thread(move || {
                 let _ = win.show();
                 let _ = win.unminimize();
@@ -526,8 +562,8 @@ fn show_settings_window(app: &AppHandle) {
         // re-enters a synchronous COM/IPC pump on the UI thread.
         let app_handle = app.clone();
         std::thread::spawn(move || {
-            let _build_guard = MAIN_BUILD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(win) = app_handle.get_webview_window("main") {
+            let _build_guard = build_lock.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(win) = app_handle.get_webview_window(label) {
                 let _ = app_handle.run_on_main_thread(move || {
                     let _ = win.show();
                     let _ = win.unminimize();
@@ -541,13 +577,13 @@ fn show_settings_window(app: &AppHandle) {
                 .app
                 .windows
                 .iter()
-                .find(|w| w.label == "main")
+                .find(|w| w.label == label)
                 .cloned();
 
             if let Some(cfg) = cfg {
                 if let Ok(builder) = WebviewWindowBuilder::from_config(&app_handle, &cfg) {
                     if let Ok(win) = builder.visible(true).build() {
-                        attach_main_close_handler(&app_handle, &win);
+                        attach_close(&app_handle, &win);
                         let _ = app_handle.run_on_main_thread(move || {
                             let _ = win.show();
                             let _ = win.unminimize();
@@ -563,7 +599,7 @@ fn show_settings_window(app: &AppHandle) {
     {
         let app_handle = app.clone();
         let _ = app.run_on_main_thread(move || {
-            if let Some(win) = app_handle.get_webview_window("main") {
+            if let Some(win) = app_handle.get_webview_window(label) {
                 let _ = win.show();
                 let _ = win.unminimize();
                 focus_settings_window(&win);
@@ -575,19 +611,48 @@ fn show_settings_window(app: &AppHandle) {
                 .app
                 .windows
                 .iter()
-                .find(|w| w.label == "main")
+                .find(|w| w.label == label)
                 .cloned();
 
             if let Some(cfg) = cfg {
                 if let Ok(builder) = WebviewWindowBuilder::from_config(&app_handle, &cfg) {
                     if let Ok(win) = builder.visible(true).build() {
-                        attach_main_close_handler(&app_handle, &win);
+                        attach_close(&app_handle, &win);
                         focus_settings_window(&win);
                     }
                 }
             }
         });
     }
+}
+
+fn show_settings_window(app: &AppHandle) {
+    show_configured_window(
+        app,
+        "main",
+        #[cfg(target_os = "windows")]
+        &MAIN_BUILD_LOCK,
+        attach_main_close_handler,
+    );
+}
+
+fn show_updater_window(app: &AppHandle, mode: &str, preview: Option<PendingUpdatePreview>) {
+    let payload = UpdaterLaunchPayload {
+        mode: mode.to_string(),
+        preview,
+    };
+    {
+        let state = app.state::<Mutex<AppState>>();
+        state.lock().unwrap().pending_updater_launch = Some(payload.clone());
+    }
+    show_configured_window(
+        app,
+        "updater",
+        #[cfg(target_os = "windows")]
+        &UPDATER_BUILD_LOCK,
+        attach_updater_close_handler,
+    );
+    let _ = app.emit("zunzshot://updater-mode", &payload);
 }
 
 fn open_settings_tab(app: &AppHandle, tab: &str) {
@@ -2604,6 +2669,45 @@ fn consume_pending_tab(state: State<'_, Mutex<AppState>>) -> Option<String> {
 }
 
 #[tauri::command]
+fn consume_pending_updater_launch(
+    state: State<'_, Mutex<AppState>>,
+) -> Option<UpdaterLaunchPayload> {
+    state.lock().unwrap().pending_updater_launch.take()
+}
+
+#[tauri::command]
+fn set_auto_check_updates_cmd(
+    app: AppHandle,
+    state: State<'_, Mutex<AppState>>,
+    enabled: bool,
+) -> Result<AppSettings, String> {
+    if !has_screen_capture_permission() {
+        return Err("Screen recording permission is required on macOS".to_string());
+    }
+
+    let (prev_settings, updated) = {
+        let mut guard = state.lock().unwrap();
+        let prev = guard.settings.clone();
+        guard.settings.auto_check_updates = enabled;
+        (prev, guard.settings.clone())
+    };
+
+    if let Err(err) = save_settings(&app, &updated) {
+        let mut guard = state.lock().unwrap();
+        guard.settings = prev_settings;
+        return Err(err);
+    }
+
+    let _ = app.emit("zunzshot://auto-updates-updated", enabled);
+    if enabled {
+        trigger_update_sensor(&app, 1);
+    } else {
+        signal_update_sensor();
+    }
+    Ok(updated)
+}
+
+#[tauri::command]
 fn consume_pending_capture_error(state: State<'_, Mutex<AppState>>) -> Option<String> {
     state.lock().unwrap().pending_capture_error.take()
 }
@@ -2709,16 +2813,57 @@ fn wait_sensor_interval(duration: Duration) -> bool {
     true
 }
 
+const UPDATE_CHECK_INTERVAL_SECS: u64 = 30 * 60;
+const UPDATE_DISMISS_COOLDOWN_SECS: u64 = 4 * 3600;
+const SNOOZE_BOUNDARY_GRACE_SECS: u64 = 5;
+
+fn normalize_snooze_hours(hours: Option<u64>) -> u64 {
+    match hours.unwrap_or(4) {
+        2 | 4 | 6 => hours.unwrap_or(4),
+        _ => 4,
+    }
+}
+
+fn snooze_still_active(elapsed: Duration, duration_secs: u64) -> bool {
+    elapsed + Duration::from_secs(SNOOZE_BOUNDARY_GRACE_SECS) < Duration::from_secs(duration_secs)
+}
+
+fn next_sensor_sleep_duration(postponed: Option<(Duration, u64)>) -> Duration {
+    let default_interval = Duration::from_secs(UPDATE_CHECK_INTERVAL_SECS);
+    let Some((elapsed, snooze_secs)) = postponed else {
+        return default_interval;
+    };
+    let Some(remaining) = Duration::from_secs(snooze_secs).checked_sub(elapsed) else {
+        return default_interval;
+    };
+    if remaining > Duration::from_secs(SNOOZE_BOUNDARY_GRACE_SECS) && remaining < default_interval {
+        remaining
+    } else {
+        default_interval
+    }
+}
+
 #[tauri::command]
-fn postpone_update_reminder(state: State<'_, Mutex<AppState>>, version: Option<String>) {
+fn postpone_update_reminder(
+    state: State<'_, Mutex<AppState>>,
+    version: Option<String>,
+    hours: Option<u64>,
+) -> u64 {
+    let snooze_hours = normalize_snooze_hours(hours);
     let mut guard = state.lock().unwrap();
     if guard.pending_tab.as_deref() == Some("update-prompt") {
         guard.pending_tab = None;
     }
-    let target_ver = version.or_else(|| guard.notified_update.as_ref().map(|(v, _)| v.clone()));
+    guard.pending_updater_launch = None;
+    let target_ver = version
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| guard.notified_update.as_ref().map(|(v, _)| v.clone()));
+    // Clear notified_update so explicit 2h / 4h / 6h snooze governs the next alert accurately.
+    guard.notified_update = None;
     if let Some(ver) = target_ver {
-        guard.postponed_update = Some((ver, std::time::Instant::now()));
+        guard.postponed_update = Some((ver, std::time::Instant::now(), snooze_hours * 3600));
     }
+    snooze_hours
 }
 
 fn trigger_update_sensor(app: &AppHandle, initial_delay_secs: u64) {
@@ -2736,18 +2881,21 @@ fn trigger_update_sensor(app: &AppHandle, initial_delay_secs: u64) {
             .await;
         }
 
-        const CHECK_INTERVAL_SECS: u64 = 2 * 3600;
-        const SNOOZE_SECS: u64 = 4 * 3600;
-
         while !SINGLE_INSTANCE_SHUTTING_DOWN.load(Ordering::Relaxed) {
-            let can_check = handle
-                .try_state::<Mutex<AppState>>()
-                .and_then(|s| {
-                    s.lock()
-                        .ok()
-                        .map(|g| g.settings.auto_check_updates && g.active_session.is_none())
-                })
+            let updater_already_open = handle
+                .get_webview_window("updater")
+                .and_then(|w| w.is_visible().ok())
                 .unwrap_or(false);
+
+            let can_check = !updater_already_open
+                && handle
+                    .try_state::<Mutex<AppState>>()
+                    .and_then(|s| {
+                        s.lock()
+                            .ok()
+                            .map(|g| g.settings.auto_check_updates && g.active_session.is_none())
+                    })
+                    .unwrap_or(false);
 
             if can_check {
                 if let Ok(updater) = handle.updater() {
@@ -2756,13 +2904,17 @@ fn trigger_update_sensor(app: &AppHandle, initial_delay_secs: u64) {
                             .try_state::<Mutex<AppState>>()
                             .and_then(|s| {
                                 s.lock().ok().map(|mut guard| {
-                                    if guard.active_session.is_some() {
+                                    let visible_now = handle
+                                        .get_webview_window("updater")
+                                        .and_then(|w| w.is_visible().ok())
+                                        .unwrap_or(false);
+                                    if guard.active_session.is_some() || visible_now {
                                         return false;
                                     }
                                     let snoozed = guard.postponed_update.as_ref().is_some_and(
-                                        |(ver, at)| {
+                                        |(ver, at, snooze_secs)| {
                                             ver == &update.version
-                                                && at.elapsed() < Duration::from_secs(SNOOZE_SECS)
+                                                && snooze_still_active(at.elapsed(), *snooze_secs)
                                         },
                                     );
                                     let recently_notified = guard
@@ -2770,29 +2922,41 @@ fn trigger_update_sensor(app: &AppHandle, initial_delay_secs: u64) {
                                         .as_ref()
                                         .is_some_and(|(ver, at)| {
                                             ver == &update.version
-                                                && at.elapsed() < Duration::from_secs(SNOOZE_SECS)
+                                                && snooze_still_active(
+                                                    at.elapsed(),
+                                                    UPDATE_DISMISS_COOLDOWN_SECS,
+                                                )
                                         });
                                     if snoozed || recently_notified {
                                         return false;
                                     }
                                     guard.notified_update =
                                         Some((update.version.clone(), std::time::Instant::now()));
-                                    guard.pending_tab = Some("update-prompt".to_string());
                                     true
                                 })
                             })
                             .unwrap_or(false);
 
                         if should_notify {
-                            show_settings_window(&handle);
-                            let _ = handle.emit("zunzshot://open-tab", "update-prompt");
+                            show_updater_window(
+                                &handle,
+                                "alert",
+                                Some(PendingUpdatePreview {
+                                    version: update.version.clone(),
+                                    body: update.body.clone(),
+                                }),
+                            );
                         }
                     }
                 }
             }
 
-            let _ = tauri::async_runtime::spawn_blocking(|| {
-                wait_sensor_interval(Duration::from_secs(CHECK_INTERVAL_SECS));
+            let postponed_state = handle
+                .try_state::<Mutex<AppState>>()
+                .and_then(|s| s.lock().ok().and_then(|g| g.postponed_update.as_ref().map(|(_, at, secs)| (at.elapsed(), *secs))));
+            let sleep_for = next_sensor_sleep_duration(postponed_state);
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                wait_sensor_interval(sleep_for);
             })
             .await;
         }
@@ -2892,7 +3056,9 @@ pub fn run() {
             copy_pinned_to_clipboard,
             close_pinned_window,
             consume_pending_tab,
+            consume_pending_updater_launch,
             consume_pending_capture_error,
+            set_auto_check_updates_cmd,
             postpone_update_reminder,
             open_screen_recording_settings,
             check_screen_capture_permission,
@@ -2926,6 +3092,7 @@ pub fn run() {
                 shortcut_modes: HashMap::new(),
                 failed_shortcuts: Vec::new(),
                 pending_tab: None,
+                pending_updater_launch: None,
                 pending_capture_error: None,
                 pinned_images: HashMap::new(),
                 postponed_update: None,
@@ -2966,7 +3133,7 @@ pub fn run() {
                             trigger_capture(app.clone(), "fullscreen".to_string())
                         }
                         "open_settings" => open_settings_tab(app, "general"),
-                        "check_updates" => open_settings_tab(app, "check-updates"),
+                        "check_updates" => show_updater_window(app, "manual", None),
                         "about" => open_settings_tab(app, "about"),
                         _ => {}
                     }
@@ -3031,8 +3198,12 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::Shortcut;
+    use super::{
+        next_sensor_sleep_duration, normalize_snooze_hours, snooze_still_active, Shortcut,
+        UPDATE_CHECK_INTERVAL_SECS,
+    };
     use std::str::FromStr;
+    use std::time::Duration;
 
     #[test]
     fn parses_standalone_and_modified_print_screen_shortcuts() {
@@ -3045,5 +3216,43 @@ mod tests {
 
         let ctrled = Shortcut::from_str("Control+PrintScreen").expect("Control+PrintScreen");
         assert_ne!(shifted.id(), ctrled.id());
+    }
+
+    #[test]
+    fn normalize_snooze_hours_accepts_two_four_six_only() {
+        assert_eq!(normalize_snooze_hours(Some(2)), 2);
+        assert_eq!(normalize_snooze_hours(Some(4)), 4);
+        assert_eq!(normalize_snooze_hours(Some(6)), 6);
+        assert_eq!(normalize_snooze_hours(None), 4);
+        assert_eq!(normalize_snooze_hours(Some(1)), 4);
+        assert_eq!(normalize_snooze_hours(Some(24)), 4);
+    }
+
+    #[test]
+    fn snooze_boundary_wakes_on_exact_interval_multiple() {
+        let two_hours = 2 * 3600;
+        assert!(snooze_still_active(Duration::from_secs(3600), two_hours));
+        assert!(!snooze_still_active(
+            Duration::from_secs(two_hours - 2),
+            two_hours
+        ));
+        assert!(!snooze_still_active(Duration::from_secs(two_hours), two_hours));
+    }
+
+    #[test]
+    fn next_sensor_sleep_preserves_30_min_poll_and_clamps_snooze_tail() {
+        let thirty_min = Duration::from_secs(UPDATE_CHECK_INTERVAL_SECS);
+        assert_eq!(thirty_min.as_secs(), 1800);
+        assert_eq!(next_sensor_sleep_duration(None), thirty_min);
+
+        let two_hours = 2 * 3600;
+        assert_eq!(
+            next_sensor_sleep_duration(Some((Duration::from_secs(1800), two_hours))),
+            thirty_min
+        );
+        assert_eq!(
+            next_sensor_sleep_duration(Some((Duration::from_secs(two_hours - 600), two_hours))),
+            Duration::from_secs(600)
+        );
     }
 }

@@ -10,28 +10,28 @@
 
 **Instant, ultra-lightweight, and creative screenshot tool for macOS and Windows.**
 
-[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v108)
-[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v108)
+[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v109)
+[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v109)
 [![Spanish README](https://img.shields.io/badge/Language-English_%7C_Espa%C3%B1ol-6366f1?style=for-the-badge)](README.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.8 for Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.9 for Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.8 for macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.9 for macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Downloads (`v1.0.8`)
+## Downloads (`v1.0.9`)
 
-Latest available version: **ZunzShot v1.0.8**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
+Latest available version: **ZunzShot v1.0.9**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
 
-| OS | Platform | Direct Download (`v1.0.8`) | Details |
+| OS | Platform | Direct Download (`v1.0.9`) | Details |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.8 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.8 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.9 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.9 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
 
 > **macOS note:** If Gatekeeper shows an unverified developer prompt on first launch, **right-click → Open** on the app in Applications or run in Terminal:
 > ```bash
@@ -114,6 +114,12 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 ---
 
 ## Release Notes
+
+### `v1.0.9`
+- **Standalone Update window & dedicated menu section:** *Check for Updates* now has its own view in the menu (right above *About*) and opens in an independent window from the system tray or automatic alerts without raising the Settings window behind it.
+- **30-minute checks & 2, 4, or 6-hour snooze:** Automatic updates now check every **30 minutes** in the background, and clicking *Remind me later* lets you choose **2**, **4**, or **6 hours**.
+- **Cleaner release note formatting:** Version details now render with structured headings, clean bullet lists, and clear highlights for effortless reading.
+- **Single home for auto-update controls:** Automatic update toggles now live exclusively inside the Updates screen, keeping *General* and *About* clean.
 
 ### `v1.0.8`
 - **Continuous multi-monitor capture (macOS & Windows):** Starting a capture now dims all connected displays at once, letting you capture within any monitor or drag one selection seamlessly across multiple screens regardless of resolution or arrangement.

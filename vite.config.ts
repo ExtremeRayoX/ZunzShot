@@ -19,6 +19,7 @@ export default defineConfig({
         overlay: resolve(__dirname, "overlay.html"),
         pin: resolve(__dirname, "pin.html"),
         toast: resolve(__dirname, "toast.html"),
+        updater: resolve(__dirname, "updater.html"),
       },
     },
   },

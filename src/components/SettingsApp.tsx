@@ -2,18 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   AlertTriangle,
   AppWindow,
   ArrowLeft,
-  Bell,
   Camera,
   Check,
   ChevronRight,
   Circle,
   Clock,
-  Download,
   FolderOpen,
   Globe,
   Image as ImageIcon,
@@ -49,8 +46,9 @@ import {
   normalizeAccelerator,
   resolveRecordedHotkeyToken,
 } from "../utils/shortcuts";
+import { UpdaterPanel } from "./UpdaterPanel";
 
-type TabId = "capture" | "general" | "shortcuts" | "stickers" | "about";
+type TabId = "capture" | "general" | "shortcuts" | "stickers" | "updates" | "about";
 
 type GlobalShortcutKey =
   | "shortcutRegion"
@@ -91,19 +89,12 @@ export const SettingsApp: React.FC = () => {
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.0.8");
+  const [appVersion, setAppVersion] = useState<string>("1.0.9");
   const [tab, setTab] = useState<TabId>("capture");
   const [extrasSubView, setExtrasSubView] = useState<"list" | "clock" | "text">("list");
-  const [showUpdatePromptModal, setShowUpdatePromptModal] = useState<boolean>(false);
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [updateState, setUpdateState] = useState<
-    "idle" | "checking" | "up-to-date" | "available" | "downloading" | "installing" | "error"
-  >("idle");
-  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
-  const [updateErrorMsg, setUpdateErrorMsg] = useState<string | null>(null);
   const [welcomeAutoUpdate, setWelcomeAutoUpdate] = useState<boolean>(false);
   const [recordingField, setRecordingField] = useState<ShortcutFieldKey | null>(null);
   const [liveTokens, setLiveTokens] = useState<string[]>([]);
@@ -112,8 +103,6 @@ export const SettingsApp: React.FC = () => {
   const shortcutSavedRef = useRef<boolean>(false);
   const settingsRef = useRef<AppSettings | null>(null);
   settingsRef.current = settings;
-  const updateStateRef = useRef(updateState);
-  updateStateRef.current = updateState;
 
   useEffect(() => {
     if (tab !== "stickers") {
@@ -122,72 +111,19 @@ export const SettingsApp: React.FC = () => {
   }, [tab]);
 
   useEffect(() => {
-    return () => {
-      if (availableUpdate) {
-        void availableUpdate.close().catch(() => {});
+    const applyPendingTab = (pending: string | null) => {
+      if (
+        pending === "capture" ||
+        pending === "general" ||
+        pending === "shortcuts" ||
+        pending === "stickers" ||
+        pending === "updates" ||
+        pending === "about"
+      ) {
+        setTab(pending);
       }
     };
-  }, [availableUpdate]);
 
-  const runUpdateCheck = async () => {
-    setUpdateState("checking");
-    setUpdateErrorMsg(null);
-    setDownloadProgress(0);
-    try {
-      if (availableUpdate) {
-        await availableUpdate.close().catch(() => {});
-        setAvailableUpdate(null);
-      }
-      const found = await check();
-      if (found) {
-        setAvailableUpdate(found);
-        setUpdateState("available");
-      } else {
-        setUpdateState("up-to-date");
-      }
-    } catch (err) {
-      setUpdateErrorMsg(
-        err instanceof Error ? err.message : String(err ?? "")
-      );
-      setUpdateState("error");
-    }
-  };
-
-  const installAvailableUpdate = async () => {
-    if (!availableUpdate) return;
-    setUpdateState("downloading");
-    setDownloadProgress(0);
-    setUpdateErrorMsg(null);
-    let totalBytes = 0;
-    let downloadedBytes = 0;
-    try {
-      await availableUpdate.downloadAndInstall((event) => {
-        if (event.event === "Started") {
-          totalBytes = event.data.contentLength ?? 0;
-          downloadedBytes = 0;
-        } else if (event.event === "Progress") {
-          downloadedBytes += event.data.chunkLength;
-          if (totalBytes > 0) {
-            setDownloadProgress(
-              Math.min(99, Math.round((downloadedBytes / totalBytes) * 100))
-            );
-          }
-        } else if (event.event === "Finished") {
-          setDownloadProgress(100);
-          setUpdateState("installing");
-        }
-      });
-      setUpdateState("installing");
-      await invoke("restart_app");
-    } catch (err) {
-      setUpdateErrorMsg(
-        err instanceof Error ? err.message : String(err ?? "")
-      );
-      setUpdateState("error");
-    }
-  };
-
-  useEffect(() => {
     void invoke<AppSettings>("get_settings").then((loaded) => {
       setSettings(loaded);
       setSavedSettings(loaded);
@@ -201,26 +137,7 @@ export const SettingsApp: React.FC = () => {
     void invoke<string | null>("consume_pending_capture_error").then((err) => {
       if (err) setCaptureError(err);
     });
-    void invoke<string | null>("consume_pending_tab").then((pending) => {
-      if (pending === "about") {
-        setTab("about");
-      } else if (pending === "check-updates") {
-        setTab("about");
-        void runUpdateCheck();
-      } else if (pending === "update-prompt") {
-        setShowUpdatePromptModal(true);
-        if (
-          updateStateRef.current !== "downloading" &&
-          updateStateRef.current !== "installing"
-        ) {
-          void runUpdateCheck();
-        }
-      } else if (pending === "general") {
-        setTab("general");
-      } else if (pending === "capture") {
-        setTab("capture");
-      }
-    });
+    void invoke<string | null>("consume_pending_tab").then(applyPendingTab);
 
     const unlistenErr = listen<string>("zunzshot://capture-error", (ev) => {
       setCaptureError(ev.payload);
@@ -235,6 +152,17 @@ export const SettingsApp: React.FC = () => {
         setSavedSettings(ev.payload);
       }
     );
+    const unlistenAutoUpd = listen<boolean>(
+      "zunzshot://auto-updates-updated",
+      (ev) => {
+        setSettings((prev) =>
+          prev ? { ...prev, autoCheckUpdates: ev.payload } : prev
+        );
+        setSavedSettings((prev) =>
+          prev ? { ...prev, autoCheckUpdates: ev.payload } : prev
+        );
+      }
+    );
     const unlistenShortcuts = listen<string[]>(
       "zunzshot://shortcuts-status",
       (ev) => {
@@ -243,30 +171,14 @@ export const SettingsApp: React.FC = () => {
     );
     const unlistenTab = listen<string>("zunzshot://open-tab", (ev) => {
       void invoke("consume_pending_tab").catch(() => {});
-      if (ev.payload === "about") {
-        setTab("about");
-      } else if (ev.payload === "check-updates") {
-        setTab("about");
-        void runUpdateCheck();
-      } else if (ev.payload === "update-prompt") {
-        setShowUpdatePromptModal(true);
-        if (
-          updateStateRef.current !== "downloading" &&
-          updateStateRef.current !== "installing"
-        ) {
-          void runUpdateCheck();
-        }
-      } else if (ev.payload === "general") {
-        setTab("general");
-      } else if (ev.payload === "capture") {
-        setTab("capture");
-      }
+      applyPendingTab(ev.payload);
     });
 
     return () => {
       void unlistenErr.then((fn) => fn());
       void unlistenPerm.then((fn) => fn());
       void unlistenUpd.then((fn) => fn());
+      void unlistenAutoUpd.then((fn) => fn());
       void unlistenShortcuts.then((fn) => fn());
       void unlistenTab.then((fn) => fn());
     };
@@ -480,17 +392,21 @@ export const SettingsApp: React.FC = () => {
     }
   };
 
-  const handleModalUpdateNow = () => {
-    setShowUpdatePromptModal(false);
-    setTab("about");
-    void installAvailableUpdate();
-  };
-
-  const handleModalRemindLater = () => {
-    setShowUpdatePromptModal(false);
-    void invoke("postpone_update_reminder", {
-      version: availableUpdate?.version ?? null,
-    }).catch(() => {});
+  const handleToggleAutoCheckUpdates = async (enabled: boolean) => {
+    setSaveError(null);
+    try {
+      const updated = await invoke<AppSettings>("set_auto_check_updates_cmd", {
+        enabled,
+      });
+      setSettings((prev) =>
+        prev ? { ...prev, autoCheckUpdates: updated.autoCheckUpdates } : updated
+      );
+      setSavedSettings((prev) =>
+        prev ? { ...prev, autoCheckUpdates: updated.autoCheckUpdates } : updated
+      );
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err ?? ""));
+    }
   };
 
   const isGeneralDirty = Boolean(
@@ -500,7 +416,6 @@ export const SettingsApp: React.FC = () => {
         settings.outputFormat !== savedSettings.outputFormat ||
         settings.launchAtStartup !== savedSettings.launchAtStartup ||
         settings.showMagnifier !== savedSettings.showMagnifier ||
-        settings.autoCheckUpdates !== savedSettings.autoCheckUpdates ||
         settings.ultraLightMode !== savedSettings.ultraLightMode)
   );
 
@@ -879,6 +794,13 @@ export const SettingsApp: React.FC = () => {
 
           <div className="sidebar-footer">
             <button
+              className={`sidebar-btn ${tab === "updates" ? "active" : ""}`}
+              onClick={() => setTab("updates")}
+            >
+              <RefreshCw size={15} />
+              <span>{t.settingsTabs.updates}</span>
+            </button>
+            <button
               className={`sidebar-btn ${tab === "about" ? "active" : ""}`}
               onClick={() => setTab("about")}
             >
@@ -1046,17 +968,6 @@ export const SettingsApp: React.FC = () => {
               <span>{t.showMagnifierLabel}</span>
             </label>
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={settings.autoCheckUpdates}
-                onChange={(e) =>
-                  setSettings({ ...settings, autoCheckUpdates: e.target.checked })
-                }
-              />
-              <span>{t.aboutSection.autoUpdateLabel}</span>
-            </label>
-
             <div className="ultra-light-group">
               <label className="checkbox-row">
                 <input
@@ -1097,7 +1008,6 @@ export const SettingsApp: React.FC = () => {
                       outputFormat: savedSettings.outputFormat,
                       launchAtStartup: savedSettings.launchAtStartup,
                       showMagnifier: savedSettings.showMagnifier,
-                      autoCheckUpdates: savedSettings.autoCheckUpdates,
                       ultraLightMode: savedSettings.ultraLightMode,
                     }
                   : prev
@@ -1497,6 +1407,16 @@ export const SettingsApp: React.FC = () => {
           </div>
         )}
 
+        {tab === "updates" && (
+          <UpdaterPanel
+            mode="embedded"
+            lang={settings.language}
+            appVersion={appVersion}
+            autoCheckUpdates={settings.autoCheckUpdates}
+            onToggleAutoCheckUpdates={handleToggleAutoCheckUpdates}
+          />
+        )}
+
         {tab === "about" && (
           <div className="about-panel">
             <img
@@ -1519,103 +1439,6 @@ export const SettingsApp: React.FC = () => {
                   : platform}
             </p>
             <p className="credits-line">{t.aboutSection.creditsLabel}</p>
-
-            <div className="update-box">
-              <button
-                className="secondary-btn"
-                onClick={() => void runUpdateCheck()}
-                disabled={
-                  updateState === "checking" ||
-                  updateState === "downloading" ||
-                  updateState === "installing"
-                }
-              >
-                <RefreshCw
-                  size={14}
-                  className={updateState === "checking" ? "spin" : ""}
-                />
-                {updateState === "checking"
-                  ? t.aboutSection.checking
-                  : t.aboutSection.checkUpdatesBtn}
-              </button>
-
-              {updateState === "up-to-date" && (
-                <div className="update-result">
-                  <span className="update-ok">
-                    <Check size={14} /> {t.aboutSection.upToDateMsg} (v{appVersion})
-                  </span>
-                </div>
-              )}
-
-              {updateState === "available" && availableUpdate && (
-                <div className="update-available-card">
-                  <strong>
-                    {t.aboutSection.updateAvailableTitle} v{availableUpdate.version}
-                  </strong>
-                  {availableUpdate.body && (
-                    <pre className="update-notes">{availableUpdate.body}</pre>
-                  )}
-                  <button
-                    className="primary-cta small"
-                    onClick={() => void installAvailableUpdate()}
-                  >
-                    <Download size={14} style={{ marginRight: 6, verticalAlign: -2 }} />
-                    {t.aboutSection.installUpdateBtn}
-                  </button>
-                </div>
-              )}
-
-              {(updateState === "downloading" || updateState === "installing") && (
-                <div className="update-progress-wrap">
-                  <span>
-                    {updateState === "installing"
-                      ? t.aboutSection.installing
-                      : `${t.aboutSection.downloading}${
-                          downloadProgress > 0 ? ` ${downloadProgress}%` : ""
-                        }`}
-                  </span>
-                  <div className="update-progress-track">
-                    <div
-                      className="update-progress-fill"
-                      style={{
-                        width: `${
-                          updateState === "installing"
-                            ? 100
-                            : Math.max(8, downloadProgress)
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {updateState === "error" && (
-                <div className="update-error">
-                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span>
-                    {t.aboutSection.updateErrorMsg}
-                    {updateErrorMsg ? ` (${updateErrorMsg})` : ""}
-                  </span>
-                </div>
-              )}
-
-              <div className="update-autocheck-card">
-                <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={settings.autoCheckUpdates}
-                    onChange={(e) =>
-                      void handleSaveSettings({
-                        ...settings,
-                        autoCheckUpdates: e.target.checked,
-                      })
-                    }
-                  />
-                  <span>{t.aboutSection.autoUpdateLabel}</span>
-                </label>
-                <span className="muted-info">{t.aboutSection.autoUpdateHint}</span>
-              </div>
-            </div>
           </div>
         )}
         </main>
@@ -1624,65 +1447,6 @@ export const SettingsApp: React.FC = () => {
       <footer className="settings-footer">
         <span className="tray-note">{t.trayHint}</span>
       </footer>
-
-      {showUpdatePromptModal && (
-        <div
-          className="update-prompt-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="update-prompt-title"
-        >
-          <div className="update-prompt-modal">
-            <div className="update-prompt-head">
-              <div className="update-prompt-icon">
-                <Bell size={20} />
-              </div>
-              <div className="update-prompt-title-wrap">
-                <h2 id="update-prompt-title">{t.aboutSection.updatePromptTitle}</h2>
-                {availableUpdate && (
-                  <span className="version-badge-mini">
-                    v{appVersion} → v{availableUpdate.version}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <p className="update-prompt-sub">{t.aboutSection.updatePromptSubtitle}</p>
-
-            {updateState === "checking" && (
-              <div className="update-prompt-status">
-                <RefreshCw size={14} className="spin" />
-                <span>...</span>
-              </div>
-            )}
-
-            {updateErrorMsg && updateState === "error" && (
-              <div className="update-prompt-error">
-                <AlertTriangle size={14} />
-                <span>{updateErrorMsg}</span>
-              </div>
-            )}
-
-            <div className="update-prompt-actions">
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={handleModalRemindLater}
-              >
-                {t.aboutSection.remindLaterBtn}
-              </button>
-              <button
-                type="button"
-                className="primary-cta small"
-                disabled={!availableUpdate || updateState === "checking"}
-                onClick={() => void handleModalUpdateNow()}
-              >
-                <Download size={14} /> {t.aboutSection.updateNowBtn}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

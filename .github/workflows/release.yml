@@ -60,10 +60,10 @@ jobs:
             - **Windows (Instalador oficial):** `ZunzShot___VERSION___x64-setup.exe`
 
             ### Novedades incluidas
-            - **Captura continua en múltiples pantallas (macOS y Windows):** Al capturar se atenúan todas tus pantallas al mismo tiempo para seleccionar dentro de cualquiera de ellas o cruzar entre varios monitores sin importar su resolución o ubicación.
-            - **Controles centrados en el monitor activo (macOS y Windows):** Las barras y avisos aparecen en la pantalla donde trabajas sin cortarse entre bordes.
-            - **Atajo directo con `PrtSc` (Windows):** Ahora puedes asignar `Impr Pant` (`PrtSc`) por sí sola o combinada *(por ejemplo `Shift + PrtSc`)* como atajo global de captura.
-            - **Ícono oficial en el instalador de Windows:** El instalador y desinstalador ahora muestran el logotipo de ZunzShot.
+            - **Actualizaciones en ventana independiente:** *Buscar actualizaciones* ahora abre su propia ventana desde la bandeja del sistema o ante un aviso automático, sin levantar el menú principal detrás, y cuenta con su sección propia en Configuración justo encima de *Acerca de*.
+            - **Comprobación cada 30 minutos y recordatorios flexibles:** Al activar actualizaciones automáticas, ZunzShot revisa cada **30 minutos** y te permite elegir recordar más tarde en **2**, **4** o **6 horas**.
+            - **Detalles de versión más legibles:** Las notas de actualización se muestran organizadas con títulos, listas y resaltados limpios.
+            - **Control centralizado:** Las actualizaciones automáticas ahora se configuran únicamente desde la pantalla de actualizaciones, simplificando *General* y *Acerca de*.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

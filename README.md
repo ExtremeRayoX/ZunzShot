@@ -10,28 +10,28 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v108)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v108)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v109)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v109)
 [![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.8 para Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.9 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.8 para macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.9 para macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas (`v1.0.8`)
+## Descargas (`v1.0.9`)
 
-Versión actual disponible: **ZunzShot v1.0.8**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.0.9**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa (`v1.0.8`) | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.0.9`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.8 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.8 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.9 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.9 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -114,6 +114,12 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ---
 
 ## Notas de Versión
+
+### `v1.0.9`
+- **Actualizaciones en su propia ventana y sección:** *Buscar actualizaciones* ahora tiene su propia pantalla en el menú (justo encima de *Acerca de*) y se abre en una ventana independiente desde la bandeja del sistema o ante un aviso automático, sin abrir el menú principal detrás.
+- **Revisión cada 30 minutos y recordatorios de 2, 4 o 6 horas:** Cuando activas la búsqueda automática, ZunzShot comprueba cada **30 minutos** en segundo plano y al pulsar *Recordar más tarde* puedes elegir si volver a avisar en **2**, **4** o **6 horas**.
+- **Detalles de versión más legibles:** Las novedades de cada actualización ahora se presentan con títulos, listas y resaltados claros para leerlos de un vistazo.
+- **Control centralizado:** La preferencia de búsqueda automática se gestiona únicamente desde *Buscar actualizaciones*, dejando *General* y *Acerca de* más ordenados.
 
 ### `v1.0.8`
 - **Captura continua en múltiples pantallas (macOS y Windows):** Al iniciar una captura se atenúan todas tus pantallas conectadas al mismo tiempo, permitiéndote seleccionar dentro de cualquiera de ellas o arrastrar una captura entre varios monitores sin importar su resolución o ubicación.
