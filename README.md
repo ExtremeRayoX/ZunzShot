@@ -12,27 +12,27 @@
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot para Windows" width="284" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.4 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot para macOS" width="284" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.4 para macOS" width="320" /></a>
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot Windows Offline" width="284" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot v1.0.4 Windows Offline" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas
+## Descargas — `v1.0.4`
 
-Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.0.4**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.0.4`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar instalador (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar v1.0.4 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar v1.0.4 offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.4 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
