@@ -57,47 +57,15 @@ jobs:
           releaseBody: |
             Instaladores oficiales de ZunzShot v__VERSION__:
             - **macOS (Universal):** `ZunzShot___VERSION___universal.dmg` (Apple Silicon e Intel)
-            - **Windows (Instalador ligero — recomendado):** `ZunzShot___VERSION___x64-setup.exe`
-            - **Windows (Instalador offline completo):** `ZunzShot___VERSION___x64-offline-setup.exe`
+            - **Windows (Instalador oficial):** `ZunzShot___VERSION___x64-setup.exe`
 
             ### Mejoras y correcciones incluidas
-            - Sensor ligero de actualizaciones en segundo plano con aviso interactivo para actualizar al instante o posponer el recordatorio.
-            - Nuevo menú de Extras en Ajustes con acceso organizado a la configuración del Sticker de Hora y Fecha.
-            - Barra contextual de Guardar cambios / Descartar integrada dentro de cada sección que aparece solo al modificar algún ajuste.
+            - Texto enriquecido editable: vuelve a editar textos con doble clic, muévelos y ajusta en vivo fondo/sin fondo, negrita, cursiva, tamaño (`A-`/`A+`) y color.
+            - Preferencias iniciales para texto dentro de **Ajustes → Extras → Texto y Etiquetas**.
+            - Retirado el instalador offline de Windows para agilizar compilaciones y entregas.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-
-      - name: Build Windows offline installers
-        if: success() && matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "src-tauri/target/release/bundle"
-          npm run tauri -- build -c src-tauri/tauri.offline.conf.json
-
-      - name: Rename and upload Windows offline installers
-        if: success() && matrix.platform == 'windows-latest'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $version = node -p "require('./package.json').version"
-          $tag = "v$version"
-          $outDir = "dist-offline"
-          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-
-          $exe = Get-ChildItem "src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
-          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | Select-Object -First 1
-          if (-not $exe -or -not $msi) {
-            throw "Expected offline NSIS (.exe) and MSI (.msi) installers were not generated."
-          }
-
-          $exeDest = Join-Path $outDir "ZunzShot_${version}_x64-offline-setup.exe"
-          $msiDest = Join-Path $outDir "ZunzShot_${version}_x64-offline.msi"
-          Copy-Item $exe.FullName $exeDest -Force
-          Copy-Item $msi.FullName $msiDest -Force
-
-          gh release upload $tag $exeDest $msiDest --clobber
 
   publish-release:
     needs: build-tauri

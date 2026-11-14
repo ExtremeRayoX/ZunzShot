@@ -60,9 +60,11 @@ import type {
   PhotoMaskShape,
   PhotoSticker,
   SelectionBox,
+  TextAnnotation,
   ToolType,
   WindowCandidate,
 } from "../types/zunzshot";
+import { Bold, Italic } from "lucide-react";
 
 const PALETTE = [
   "#06d6c6",
@@ -325,11 +327,17 @@ export const OverlayApp: React.FC = () => {
   });
   const [toast, setToast] = useState<ToastState | null>(null);
 
-  // Inline text input state
+  // Inline text input state (for creating new text or editing an existing one)
   const [textInput, setTextInput] = useState<{
+    editingId: string | null;
     x: number;
     y: number;
     value: string;
+    color: string;
+    fontSize: number;
+    hasBg: boolean;
+    bold: boolean;
+    italic: boolean;
   } | null>(null);
 
   // Interactive drag state kept in ref for smooth 60fps pointer tracking
@@ -931,6 +939,7 @@ export const OverlayApp: React.FC = () => {
     // 3. Draw committed items and active draft item
     const pixelSource = { bitmap, cssW, cssH };
     for (const item of items) {
+      if (textInput?.editingId === item.id) continue;
       drawOverlayItem(
         ctx,
         item,
@@ -963,6 +972,7 @@ export const OverlayApp: React.FC = () => {
     items,
     draftItem,
     selectedStickerId,
+    textInput?.editingId,
     lang,
   ]);
 
@@ -970,17 +980,36 @@ export const OverlayApp: React.FC = () => {
     async (selectionOverride?: SelectionBox): Promise<Uint8Array | null> => {
       const activeSel = selectionOverride ?? selectionRef.current ?? selection;
       if (!bitmap || !metadata || !activeSel) return null;
+      const liveTrimmed = textInput?.value.trim() ?? "";
+      const exportItems: OverlayItem[] =
+        textInput && liveTrimmed.length > 0
+          ? [
+              ...items.filter((it) => it.id !== textInput.editingId),
+              {
+                id: textInput.editingId ?? "text_draft",
+                type: "text",
+                x: textInput.x,
+                y: textInput.y,
+                text: liveTrimmed,
+                color: textInput.color,
+                fontSize: textInput.fontSize,
+                hasBg: textInput.hasBg,
+                bold: textInput.bold,
+                italic: textInput.italic,
+              },
+            ]
+          : items;
       return renderExportPngBytes(
         bitmap,
         viewport.w,
         viewport.h,
         activeSel,
-        items,
+        exportItems,
         metadata.capturedAtIso,
         lang
       );
     },
-    [bitmap, metadata, selection, viewport, items, lang]
+    [bitmap, metadata, selection, viewport, items, textInput, lang]
   );
 
   const handleCopy = useCallback(
@@ -1447,7 +1476,10 @@ export const OverlayApp: React.FC = () => {
           commitItems((prev) =>
             prev.map((it) =>
               it.id === selectedStickerId &&
-              (it.type === "clock" || it.type === "photo" || it.type === "step")
+              (it.type === "clock" ||
+                it.type === "photo" ||
+                it.type === "step" ||
+                it.type === "text")
                 ? { ...it, x: it.x + dx, y: it.y + dy }
                 : it
             )
@@ -1517,6 +1549,28 @@ export const OverlayApp: React.FC = () => {
     const draft = textInput;
     setTextInput(null);
     const trimmed = draft.value.trim();
+    if (draft.editingId) {
+      if (trimmed.length > 0) {
+        commitItems((prev) =>
+          prev.map((it) =>
+            it.id === draft.editingId && it.type === "text"
+              ? {
+                  ...it,
+                  text: trimmed,
+                  color: draft.color,
+                  fontSize: draft.fontSize,
+                  hasBg: draft.hasBg,
+                  bold: draft.bold,
+                  italic: draft.italic,
+                }
+              : it
+          )
+        );
+      } else {
+        commitItems((prev) => prev.filter((it) => it.id !== draft.editingId));
+      }
+      return;
+    }
     if (trimmed.length > 0) {
       commitItems((prev) => [
         ...prev,
@@ -1526,9 +1580,11 @@ export const OverlayApp: React.FC = () => {
           x: draft.x,
           y: draft.y,
           text: trimmed,
-          color: activeColor,
-          fontSize: strokeWidth === 2 ? 16 : strokeWidth === 4 ? 22 : 30,
-          hasBg: true,
+          color: draft.color,
+          fontSize: draft.fontSize,
+          hasBg: draft.hasBg,
+          bold: draft.bold,
+          italic: draft.italic,
         },
       ]);
     }
@@ -1580,8 +1636,8 @@ export const OverlayApp: React.FC = () => {
       return;
     }
 
-    // 3. Check if user grabbed a sticker (Photo, Clock, or Numbered Step) when in select mode
-    if (activeTool === "select" && ctx) {
+    // 3. Check if user grabbed a sticker (Photo, Clock, Text, or Numbered Step) when in select mode (or existing text in text mode)
+    if ((activeTool === "select" || activeTool === "text") && ctx) {
       const hit = hitTestSticker(
         ctx,
         px,
@@ -1590,7 +1646,12 @@ export const OverlayApp: React.FC = () => {
         metadata.capturedAtIso,
         lang
       );
-      if (hit) {
+      if (hit && (activeTool === "select" || hit.item.type === "text")) {
+        if (hit.item.type === "text" && e.detail >= 2) {
+          e.preventDefault();
+          startEditingTextItem(hit.item);
+          return;
+        }
         setSelectedStickerId(hit.item.id);
         setActivePopover(null);
         dragRef.current = {
@@ -1602,13 +1663,15 @@ export const OverlayApp: React.FC = () => {
           origX:
             hit.item.type === "clock" ||
             hit.item.type === "photo" ||
-            hit.item.type === "step"
+            hit.item.type === "step" ||
+            hit.item.type === "text"
               ? hit.item.x
               : 0,
           origY:
             hit.item.type === "clock" ||
             hit.item.type === "photo" ||
-            hit.item.type === "step"
+            hit.item.type === "step" ||
+            hit.item.type === "text"
               ? hit.item.y
               : 0,
           origW: hit.item.type === "photo" ? hit.item.w : 0,
@@ -1619,7 +1682,9 @@ export const OverlayApp: React.FC = () => {
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
-      setSelectedStickerId(null);
+      if (activeTool === "select") {
+        setSelectedStickerId(null);
+      }
     }
 
     // 4. Check resize handles (always available) or interior move (when activeTool === "select")
@@ -1640,7 +1705,19 @@ export const OverlayApp: React.FC = () => {
     if (activeTool === "text") {
       e.preventDefault();
       textOpenedAtRef.current = performance.now();
-      setTextInput({ x: px, y: py, value: "" });
+      setSelectedStickerId(null);
+      setActivePopover(null);
+      setTextInput({
+        editingId: null,
+        x: px,
+        y: py,
+        value: "",
+        color: activeColor,
+        fontSize: settings?.textDefaultSize ?? 22,
+        hasBg: settings?.textDefaultBg ?? true,
+        bold: settings?.textDefaultBold ?? true,
+        italic: settings?.textDefaultItalic ?? false,
+      });
       return;
     }
 
@@ -1649,6 +1726,8 @@ export const OverlayApp: React.FC = () => {
       const hex = samplePixelHex(px, py);
       if (hex) {
         setActiveColor(hex);
+        updateSelectedText({ color: hex });
+        setTextInput((prev) => (prev ? { ...prev, color: hex } : null));
         void invoke("copy_text_to_clipboard", { text: hex });
         showToastMsg(`${t.overlay.colorCopiedMsg} ${hex}`, false, 1800);
       }
@@ -1790,7 +1869,7 @@ export const OverlayApp: React.FC = () => {
             }
             return { ...it, x: drag.origX + dx, y: drag.origY + dy };
           }
-          if (it.type === "clock" || it.type === "step") {
+          if (it.type === "clock" || it.type === "step" || it.type === "text") {
             return { ...it, x: drag.origX + dx, y: drag.origY + dy };
           }
           return it;
@@ -2170,6 +2249,81 @@ export const OverlayApp: React.FC = () => {
     );
   };
 
+  const updateSelectedText = (patch: Partial<TextAnnotation>) => {
+    if (!selectedSticker || selectedSticker.type !== "text") return;
+    commitItems((prev) =>
+      prev.map((it) =>
+        it.id === selectedSticker.id && it.type === "text"
+          ? { ...it, ...patch }
+          : it
+      )
+    );
+  };
+
+  const startEditingTextItem = (item: TextAnnotation) => {
+    textOpenedAtRef.current = performance.now();
+    setSelectedStickerId(null);
+    setActivePopover(null);
+    setActiveColor(item.color);
+    setTextInput({
+      editingId: item.id,
+      x: item.x,
+      y: item.y,
+      value: item.text,
+      color: item.color,
+      fontSize: item.fontSize,
+      hasBg: item.hasBg,
+      bold: item.bold,
+      italic: item.italic,
+    });
+  };
+
+  const activeTextStyle = textInput
+    ? {
+        fontSize: textInput.fontSize,
+        hasBg: textInput.hasBg,
+        bold: textInput.bold,
+        italic: textInput.italic,
+        color: textInput.color,
+      }
+    : selectedSticker?.type === "text"
+      ? {
+          fontSize: selectedSticker.fontSize,
+          hasBg: selectedSticker.hasBg,
+          bold: selectedSticker.bold,
+          italic: selectedSticker.italic,
+          color: selectedSticker.color,
+        }
+      : null;
+
+  const patchActiveTextStyle = (
+    patch: Partial<
+      Pick<TextAnnotation, "fontSize" | "hasBg" | "bold" | "italic" | "color">
+    >
+  ) => {
+    if (textInput) {
+      setTextInput((prev) => (prev ? { ...prev, ...patch } : null));
+    } else if (selectedSticker?.type === "text") {
+      updateSelectedText(patch);
+    }
+  };
+
+  const removeActiveText = () => {
+    if (textInput) {
+      const targetId = textInput.editingId;
+      setTextInput(null);
+      if (targetId) {
+        commitItems((prev) => prev.filter((it) => it.id !== targetId));
+      }
+      return;
+    }
+    if (selectedSticker?.type === "text") {
+      const targetId = selectedSticker.id;
+      setSelectedStickerId(null);
+      commitItems((prev) => prev.filter((it) => it.id !== targetId));
+    }
+  };
+
   const frozenTimeLabel = useMemo(() => {
     if (!metadata) return "";
     const clock = selectedSticker?.type === "clock" ? selectedSticker : null;
@@ -2357,8 +2511,19 @@ export const OverlayApp: React.FC = () => {
           style={{
             left: textInput.x,
             top: textInput.y,
-            color: activeColor,
-            fontSize: strokeWidth === 2 ? 16 : strokeWidth === 4 ? 22 : 30,
+            color: textInput.color,
+            fontSize: textInput.fontSize,
+            fontWeight: textInput.bold ? 700 : 400,
+            fontStyle: textInput.italic ? "italic" : "normal",
+            background: textInput.hasBg
+              ? "rgba(15, 23, 42, 0.78)"
+              : "rgba(15, 23, 42, 0.16)",
+            borderColor: textInput.hasBg
+              ? "rgba(56, 189, 248, 0.75)"
+              : "rgba(255, 255, 255, 0.55)",
+            textShadow: textInput.hasBg
+              ? "none"
+              : "0 1px 4px rgba(0, 0, 0, 0.7)",
           }}
           placeholder={t.overlay.textPlaceholder}
           value={textInput.value}
@@ -2751,14 +2916,33 @@ export const OverlayApp: React.FC = () => {
                     <Palette size={12} /> {t.overlay.colorLabel}
                   </span>
                   <div className="color-swatches" aria-label={t.overlay.colorLabel}>
-                    {PALETTE.map((c) => (
-                      <button
-                        key={c}
-                        className={`swatch ${activeColor === c ? "selected" : ""}`}
-                        style={{ backgroundColor: c }}
-                        onClick={() => setActiveColor(c)}
-                      />
-                    ))}
+                    {PALETTE.map((c) => {
+                      const currentColor =
+                        textInput?.color ??
+                        (selectedSticker?.type === "text"
+                          ? selectedSticker.color
+                          : activeColor);
+                      return (
+                        <button
+                          key={c}
+                          className={`swatch ${currentColor === c ? "selected" : ""}`}
+                          style={{ backgroundColor: c }}
+                          onMouseDown={(e) => {
+                            if (textInput) e.preventDefault();
+                          }}
+                          onClick={() => {
+                            setActiveColor(c);
+                            if (textInput) {
+                              setTextInput((prev) =>
+                                prev ? { ...prev, color: c } : null
+                              );
+                            } else if (selectedSticker?.type === "text") {
+                              updateSelectedText({ color: c });
+                            }
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                   <span className="dock-sep" />
                   <div className="stroke-sizes" aria-label={t.overlay.sizeLabel}>
@@ -2934,6 +3118,142 @@ export const OverlayApp: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {!activePopover &&
+              (textInput !== null || selectedSticker?.type === "text") &&
+              activeTextStyle && (
+                <div
+                  className={`dock-popover sticker-popover text-inspector-popover ${
+                    toolbarLayout.popUpwards ? "popover-up" : "popover-down"
+                  } ${toolbarLayout.popAlignRight ? "align-right" : "align-left"}`}
+                  onMouseDown={(e) => {
+                    if (textInput) e.preventDefault();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <div className="sticker-row">
+                    <span className="sticker-title">{t.overlay.textConfigTitle}</span>
+                    <button
+                      type="button"
+                      className={`mini-pill ${activeTextStyle.hasBg ? "active" : ""}`}
+                      onClick={() => patchActiveTextStyle({ hasBg: true })}
+                    >
+                      {t.overlay.textWithBg}
+                    </button>
+                    <button
+                      type="button"
+                      className={`mini-pill ${!activeTextStyle.hasBg ? "active" : ""}`}
+                      onClick={() => patchActiveTextStyle({ hasBg: false })}
+                    >
+                      {t.overlay.textNoBg}
+                    </button>
+                    <button
+                      type="button"
+                      className={`mini-pill icon-pill ${activeTextStyle.bold ? "active" : ""}`}
+                      title={t.overlay.textBold}
+                      aria-label={t.overlay.textBold}
+                      onClick={() =>
+                        patchActiveTextStyle({ bold: !activeTextStyle.bold })
+                      }
+                    >
+                      <Bold size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`mini-pill icon-pill ${activeTextStyle.italic ? "active" : ""}`}
+                      title={t.overlay.textItalic}
+                      aria-label={t.overlay.textItalic}
+                      onClick={() =>
+                        patchActiveTextStyle({ italic: !activeTextStyle.italic })
+                      }
+                    >
+                      <Italic size={12} />
+                    </button>
+                  </div>
+
+                  <div className="sticker-row">
+                    <button
+                      type="button"
+                      className="mini-pill"
+                      title={t.overlay.textSizeDown}
+                      aria-label={t.overlay.textSizeDown}
+                      onClick={() =>
+                        patchActiveTextStyle({
+                          fontSize: Math.max(12, activeTextStyle.fontSize - 2),
+                        })
+                      }
+                    >
+                      A-
+                    </button>
+                    <span className="text-size-readout">
+                      {activeTextStyle.fontSize}px
+                    </span>
+                    <button
+                      type="button"
+                      className="mini-pill"
+                      title={t.overlay.textSizeUp}
+                      aria-label={t.overlay.textSizeUp}
+                      onClick={() =>
+                        patchActiveTextStyle({
+                          fontSize: Math.min(72, activeTextStyle.fontSize + 2),
+                        })
+                      }
+                    >
+                      A+
+                    </button>
+                    <span className="text-swatch-sep" />
+                    <div className="text-inline-swatches">
+                      {PALETTE.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`text-mini-swatch ${
+                            activeTextStyle.color === c ? "selected" : ""
+                          }`}
+                          style={{ backgroundColor: c }}
+                          aria-label={c}
+                          onClick={() => {
+                            setActiveColor(c);
+                            patchActiveTextStyle({ color: c });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="sticker-row">
+                    {!textInput && selectedSticker?.type === "text" && (
+                      <button
+                        type="button"
+                        className="mini-pill"
+                        onClick={() => startEditingTextItem(selectedSticker)}
+                      >
+                        <Pencil size={11} /> {t.overlay.textEditBtn}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="mini-pill danger"
+                      onClick={removeActiveText}
+                    >
+                      <Trash2 size={11} /> {t.overlay.textDelete}
+                    </button>
+                    <button
+                      type="button"
+                      className="mini-pill"
+                      onClick={() => {
+                        if (textInput) {
+                          commitText();
+                        } else {
+                          setSelectedStickerId(null);
+                        }
+                      }}
+                    >
+                      <Check size={11} /> {t.overlay.done}
+                    </button>
+                  </div>
+                </div>
+              )}
           </div>
 
           {/* Vertical Output Actions Bar (completes the L along the right edge) */}

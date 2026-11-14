@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Sparkles,
   Square,
+  Type,
   Zap,
 } from "lucide-react";
 import { getTranslations } from "../i18n/translations";
@@ -89,9 +90,9 @@ export const SettingsApp: React.FC = () => {
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.0.5");
+  const [appVersion, setAppVersion] = useState<string>("1.0.6");
   const [tab, setTab] = useState<TabId>("capture");
-  const [extrasSubView, setExtrasSubView] = useState<"list" | "clock">("list");
+  const [extrasSubView, setExtrasSubView] = useState<"list" | "clock" | "text">("list");
   const [showUpdatePromptModal, setShowUpdatePromptModal] = useState<boolean>(false);
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
@@ -502,6 +503,15 @@ export const SettingsApp: React.FC = () => {
         settings.clockShowSeconds !== savedSettings.clockShowSeconds ||
         settings.clockShowDate !== savedSettings.clockShowDate ||
         settings.clockStyle !== savedSettings.clockStyle)
+  );
+
+  const isTextDefaultsDirty = Boolean(
+    settings &&
+      savedSettings &&
+      (settings.textDefaultBg !== savedSettings.textDefaultBg ||
+        settings.textDefaultBold !== savedSettings.textDefaultBold ||
+        settings.textDefaultItalic !== savedSettings.textDefaultItalic ||
+        settings.textDefaultSize !== savedSettings.textDefaultSize)
   );
 
   const renderInMenuSaveBar = (isDirty: boolean, onDiscard: () => void) => {
@@ -1197,6 +1207,25 @@ export const SettingsApp: React.FC = () => {
                 </div>
               </button>
 
+              <button
+                type="button"
+                className="extras-item-card interactive"
+                onClick={() => setExtrasSubView("text")}
+              >
+                <div className="extras-card-icon accent">
+                  <Type size={20} />
+                </div>
+                <div className="extras-card-body">
+                  <strong>{t.extrasMenu.textCardTitle}</strong>
+                  <span>{t.extrasMenu.textCardDesc}</span>
+                </div>
+                <div className="extras-card-meta">
+                  <span className="extras-config-pill">
+                    {t.extrasMenu.configureBtn} <ChevronRight size={14} />
+                  </span>
+                </div>
+              </button>
+
               <div className="extras-item-card">
                 <div className="extras-card-icon">
                   <ImageIcon size={20} />
@@ -1328,6 +1357,111 @@ export const SettingsApp: React.FC = () => {
                       clockShowSeconds: savedSettings.clockShowSeconds,
                       clockShowDate: savedSettings.clockShowDate,
                       clockStyle: savedSettings.clockStyle,
+                    }
+                  : prev
+              )
+            )}
+          </div>
+        )}
+
+        {tab === "stickers" && extrasSubView === "text" && (
+          <div className="panel">
+            <div className="extras-subview-head">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setExtrasSubView("list")}
+              >
+                <ArrowLeft size={14} /> {t.extrasMenu.backToExtrasBtn}
+              </button>
+              <span className="extras-subview-title">{t.textDefaults.title}</span>
+            </div>
+
+            <p className="muted-info">{t.textDefaults.subtitle}</p>
+
+            <div className="toggle-grid">
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.textDefaultBg}
+                  onChange={(e) =>
+                    setSettings({ ...settings, textDefaultBg: e.target.checked })
+                  }
+                />
+                <span>{t.textDefaults.defaultBg}</span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.textDefaultBold}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      textDefaultBold: e.target.checked,
+                    })
+                  }
+                />
+                <span>{t.textDefaults.defaultBold}</span>
+              </label>
+
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings.textDefaultItalic}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      textDefaultItalic: e.target.checked,
+                    })
+                  }
+                />
+                <span>{t.textDefaults.defaultItalic}</span>
+              </label>
+            </div>
+
+            <div className="field-group">
+              <label>{t.textDefaults.defaultSize}</label>
+              <div className="segmented">
+                {[16, 22, 28, 36].map((sz) => (
+                  <button
+                    key={sz}
+                    type="button"
+                    className={settings.textDefaultSize === sz ? "active" : ""}
+                    onClick={() =>
+                      setSettings({ ...settings, textDefaultSize: sz })
+                    }
+                  >
+                    {sz}px
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="clock-preview-stage">
+              <div
+                className={`text-preview-pill ${
+                  settings.textDefaultBg ? "with-bg" : "no-bg"
+                }`}
+                style={{
+                  fontSize: settings.textDefaultSize,
+                  fontWeight: settings.textDefaultBold ? 700 : 400,
+                  fontStyle: settings.textDefaultItalic ? "italic" : "normal",
+                }}
+              >
+                {t.textDefaults.previewSample}
+              </div>
+            </div>
+
+            {renderInMenuSaveBar(isTextDefaultsDirty, () =>
+              setSettings((prev) =>
+                prev && savedSettings
+                  ? {
+                      ...prev,
+                      textDefaultBg: savedSettings.textDefaultBg,
+                      textDefaultBold: savedSettings.textDefaultBold,
+                      textDefaultItalic: savedSettings.textDefaultItalic,
+                      textDefaultSize: savedSettings.textDefaultSize,
                     }
                   : prev
               )

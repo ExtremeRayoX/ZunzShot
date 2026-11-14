@@ -7,6 +7,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_text_size() -> u32 {
+    22
+}
+
 fn default_shortcut_quick_copy() -> String {
     "CommandOrControl+Shift+D".to_string()
 }
@@ -73,6 +77,14 @@ pub struct AppSettings {
     pub clock_show_seconds: bool,
     pub clock_show_date: bool,
     pub clock_style: String,
+    #[serde(default = "default_true")]
+    pub text_default_bg: bool,
+    #[serde(default = "default_true")]
+    pub text_default_bold: bool,
+    #[serde(default)]
+    pub text_default_italic: bool,
+    #[serde(default = "default_text_size")]
+    pub text_default_size: u32,
 }
 
 impl AppSettings {
@@ -108,6 +120,10 @@ impl AppSettings {
             clock_show_seconds: false,
             clock_show_date: false,
             clock_style: "glass-dark".to_string(),
+            text_default_bg: true,
+            text_default_bold: true,
+            text_default_italic: false,
+            text_default_size: 22,
         }
     }
 }

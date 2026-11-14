@@ -10,33 +10,28 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v105)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v105)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v106)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v106)
 [![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.5 para Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.6 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.5 para macOS" width="320" /></a>
-
-<br />
-
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot v1.0.5 Windows Offline" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.6 para macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas (`v1.0.5`)
+## Descargas (`v1.0.6`)
 
-Versión actual disponible: **ZunzShot v1.0.5**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.0.6**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa (`v1.0.5`) | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.0.6`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar v1.0.5 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar v1.0.5 offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.5 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.6 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.6 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.6/ZunzShot_1.0.6_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -52,7 +47,7 @@ ZunzShot está diseñado bajo un enfoque **local-first** para proteger tu pantal
 - **Procesamiento 100 % en tu equipo:** Todas las capturas, anotaciones, stickers, textos y recortes se procesan y guardan exclusivamente de forma local (RAM, portapapeles o la carpeta que elijas).
 - **Sin nube ni terceros:** Tus imágenes nunca se suben ni se comparten con servidores externos salvo que tú mismo uses la acción de **Compartir** o **Guardar**.
 - **Sin telemetría ni rastreo:** No recopila estadísticas de uso, analítica, publicidad ni requiere cuentas o inicio de sesión.
-- **Conexión de red opcional únicamente para actualizaciones:** La única conexión externa posible es consultar los lanzamientos oficiales en GitHub (`github.com/ExtremeRayoX/ZunzShot/releases`) si activas la búsqueda automática o pulsas *Buscar actualizaciones* manualmente en Ajustes (puedes desactivarlo en cualquier momento o usar la edición **Windows Offline**).
+- **Conexión de red opcional únicamente para actualizaciones:** La única conexión externa posible es consultar los lanzamientos oficiales en GitHub (`github.com/ExtremeRayoX/ZunzShot/releases`) si activas la búsqueda automática o pulsas *Buscar actualizaciones* manualmente en Ajustes (puedes desactivarlo en cualquier momento).
 
 ---
 
@@ -76,14 +71,14 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 
 | Ícono | Herramienta | Para qué sirve |
 | :---: | :--- | :--- |
-| <img src="docs/icons/tool-select.svg" width="26" height="26" alt="Seleccionar y mover" /> | **Seleccionar / Mover** | Ajusta libremente el recuadro de captura o arrastra y redimensiona stickers, fotos y pasos agregados encima. |
+| <img src="docs/icons/tool-select.svg" width="26" height="26" alt="Seleccionar y mover" /> | **Seleccionar / Mover** | Ajusta libremente el recuadro de captura o arrastra y ajusta textos, stickers, fotos y pasos agregados encima. |
 | <img src="docs/icons/tool-pen.svg" width="26" height="26" alt="Lápiz libre" /> | **Lápiz libre** *(submenú Trazos)* | Dibuja anotaciones a mano alzada sobre cualquier parte de la captura. |
 | <img src="docs/icons/tool-marker.svg" width="26" height="26" alt="Resaltador" /> | **Resaltador** *(submenú Trazos)* | Destaca texto o áreas importantes con trazo translúcido tipo marcador. |
 | <img src="docs/icons/tool-underline.svg" width="26" height="26" alt="Subrayar" /> | **Subrayar** *(submenú Trazos)* | Traza líneas rectas horizontales perfectas para subrayar frases o cifras rápidamente. |
 | <img src="docs/icons/tool-arrow.svg" width="26" height="26" alt="Flecha" /> | **Flecha** | Señala botones, menús o elementos clave con flechas nítidas y personalizables. |
 | <img src="docs/icons/tool-rect.svg" width="26" height="26" alt="Rectángulo" /> | **Rectángulo** *(submenú Formas)* | Enmarca zonas o bloques completos mediante rectángulos limpios. |
 | <img src="docs/icons/tool-circle.svg" width="26" height="26" alt="Círculo / Óvalo" /> | **Círculo / Óvalo** *(submenú Formas)* | Rodea íconos, números o elementos concretos con óvalos o círculos. |
-| <img src="docs/icons/tool-text.svg" width="26" height="26" alt="Texto" /> | **Texto** | Inserta etiquetas y comentarios escritos directamente sobre la imagen con fondo legible. |
+| <img src="docs/icons/tool-text.svg" width="26" height="26" alt="Texto" /> | **Texto** | Inserta etiquetas **editables** sobre la imagen: cambia en vivo o al seleccionarlas el **fondo** (*Con fondo* / *Sin fondo*), **negrita (`B`)**, **cursiva (`I`)**, tamaño (`A-` / `A+` de `12px` a `72px`) y color; arrástralas, muévelas con las flechas o haz **doble clic** para volver a editarlas. |
 | <img src="docs/icons/tool-pixelate.svg" width="26" height="26" alt="Pixelar / Censurar" /> | **Pixelar / Censurar** | Aplica efecto mosaico para ocultar contraseñas, correos, rostros o datos confidenciales. |
 | <img src="docs/icons/tool-crop-circle.svg" width="26" height="26" alt="Alternar forma de recorte" /> <img src="docs/icons/tool-crop-rect.svg" width="26" height="26" alt="Cambiar a rectángulo" /> | **Recorte Rectangular / Circular** | Convierte tu selección actual entre rectángulo y círculo en cualquier momento sin perder tus trazos. |
 | <img src="docs/icons/tool-sticker.svg" width="26" height="26" alt="Extras y Stickers" /> | **Extras y Stickers** | Abre el menú de elementos creativos para añadir imágenes, hora congelada y pasos numerados. |
@@ -98,6 +93,8 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 | <img src="docs/icons/tool-photo.svg" width="26" height="26" alt="Agregar foto o sticker" /> | **Foto / Imagen superpuesta** | Inserta una imagen estática sobre tu captura (desde archivo o pegando directo con `⌘/Ctrl + V`) con recorte cuadrado, redondeado o circular. |
 | <img src="docs/icons/tool-clock.svg" width="26" height="26" alt="Sticker de fecha y hora" /> | **Sticker de Fecha y Hora** | Coloca un sello visual elegante con la fecha y hora exacta en que se tomó la captura (configurable en 12h/24h y estilos). |
 | <img src="docs/icons/tool-step.svg" width="26" height="26" alt="Pasos numerados" /> | **Pasos numerados (`1, 2, 3...`)** | Agrega burbujas numeradas consecutivas para crear guías visuales y tutoriales paso a paso en segundos. |
+
+> **Preferencias por defecto en Ajustes → Extras:** Desde la pestaña **Extras** en Ajustes puedes configurar los valores iniciales tanto del **Sticker de Hora y Fecha** *(formato 12h/24h, segundos, fecha y estilo)* como de **Texto y Etiquetas** *(fondo por defecto, negrita, cursiva y tamaño inicial `16px`–`36px`)*.
 
 ---
 
@@ -115,6 +112,11 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ---
 
 ## Notas de Versión
+
+### `v1.0.6`
+- **Texto enriquecido editable y configurable:** Los textos añadidos sobre la captura ahora pueden seleccionarse, moverse, ajustarse con flechas del teclado, volver a editarse con **doble clic** y personalizarse en vivo (mientras escribes o al seleccionarlos) con alternador **Con fondo / Sin fondo**, **negrita (`B`)**, **cursiva (`I`)**, tamaño (`A-` / `A+`) y paleta de color sin impacto en el peso de la app.
+- **Valores iniciales para texto en Ajustes → Extras:** Nueva vista **Texto y Etiquetas** dentro de **Extras** con vista previa en vivo para definir si los nuevos textos arrancan con fondo, negrita, cursiva y tamaño inicial predeterminado.
+- **Instalador único para Windows:** Retirada la compilación *offline* de Windows para mantener el proyecto ligero y acelerar compilaciones y entregas.
 
 ### `v1.0.5`
 - **Sensor ligero de actualizaciones en segundo plano:** Detección periódica de nuevas versiones mientras la aplicación permanece abierta sin impacto en CPU ni memoria, con aviso interactivo para **Actualizar ahora** o **Recordar más tarde**.

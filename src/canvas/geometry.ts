@@ -4,6 +4,7 @@ import type {
   OverlayItem,
   PhotoSticker,
   SelectionBox,
+  TextAnnotation,
 } from "../types/zunzshot";
 
 export type HandleId =
@@ -433,33 +434,39 @@ export function drawOverlayItem(
       ctx.stroke();
     }
   } else if (item.type === "text") {
-    ctx.font = `700 ${item.fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    const m = measureTextAnnotation(ctx, item);
+    ctx.font = m.font;
     ctx.textBaseline = "top";
-    const lines = item.text.split("\n");
-    const lineH = item.fontSize * 1.22;
     if (item.hasBg) {
-      let maxW = 0;
-      for (const line of lines) {
-        maxW = Math.max(maxW, ctx.measureText(line).width);
-      }
       ctx.fillStyle = "rgba(15, 23, 42, 0.72)";
-      drawRoundedRectPath(
-        ctx,
-        item.x - 6,
-        item.y - 4,
-        maxW + 12,
-        lines.length * lineH + 6,
-        6
-      );
+      drawRoundedRectPath(ctx, m.boxX, m.boxY, m.boxW, m.boxH, 6);
       ctx.fill();
     } else {
       ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
       ctx.shadowBlur = 4;
     }
     ctx.fillStyle = item.color;
-    lines.forEach((line, idx) => {
-      ctx.fillText(line, item.x, item.y + idx * lineH);
+    m.lines.forEach((line, idx) => {
+      ctx.fillText(line, item.x, item.y + idx * m.lineH);
     });
+    if (selected) {
+      ctx.save();
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      drawRoundedRectPath(
+        ctx,
+        m.boxX - 3,
+        m.boxY - 3,
+        m.boxW + 6,
+        m.boxH + 6,
+        8
+      );
+      ctx.stroke();
+      ctx.restore();
+    }
   } else if (item.type === "pixelate") {
     const rw = Math.max(1, item.w);
     const rh = Math.max(1, item.h);
@@ -582,9 +589,63 @@ export function hitTestSticker(
       if (Math.hypot(px - item.x, py - item.y) <= item.radius + 4) {
         return { item, resizeCorner: false };
       }
+    } else if (item.type === "text") {
+      const m = measureTextAnnotation(ctx, item);
+      const hitW = Math.max(m.boxW, 28);
+      if (
+        px >= m.boxX &&
+        px <= m.boxX + hitW &&
+        py >= m.boxY &&
+        py <= m.boxY + m.boxH
+      ) {
+        return { item, resizeCorner: false };
+      }
     }
   }
   return null;
+}
+
+export function buildTextFont(
+  fontSize: number,
+  bold: boolean,
+  italic: boolean
+): string {
+  return `${italic ? "italic " : ""}${bold ? "700" : "400"} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+}
+
+export function measureTextAnnotation(
+  ctx: CanvasRenderingContext2D,
+  item: TextAnnotation
+): {
+  font: string;
+  lines: string[];
+  lineH: number;
+  maxW: number;
+  boxX: number;
+  boxY: number;
+  boxW: number;
+  boxH: number;
+} {
+  ctx.save();
+  const font = buildTextFont(item.fontSize, item.bold, item.italic);
+  ctx.font = font;
+  const lines = item.text.split("\n");
+  const lineH = item.fontSize * 1.22;
+  let maxW = 0;
+  for (const line of lines) {
+    maxW = Math.max(maxW, ctx.measureText(line).width);
+  }
+  ctx.restore();
+  return {
+    font,
+    lines,
+    lineH,
+    maxW,
+    boxX: item.x - 6,
+    boxY: item.y - 4,
+    boxW: maxW + 12,
+    boxH: lines.length * lineH + 6,
+  };
 }
 
 /**

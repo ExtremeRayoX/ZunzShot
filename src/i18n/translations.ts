@@ -114,6 +114,9 @@ export const TRANSLATIONS = {
       clockCardTitle: "Sticker de Hora y Fecha",
       clockCardDesc:
         "Configura el formato de hora (12h/24h), segundos, fecha y estilo visual por defecto.",
+      textCardTitle: "Texto y Etiquetas",
+      textCardDesc:
+        "Define el fondo, negrita, cursiva y tamaño inicial al colocar textos en tus capturas.",
       configureBtn: "Configurar",
       backToExtrasBtn: "Volver a Extras",
       photoCardTitle: "Foto / Imagen superpuesta",
@@ -123,6 +126,18 @@ export const TRANSLATIONS = {
       stepsCardDesc:
         "Coloca marcadores consecutivos en un clic para crear tutoriales y guías rápidas.",
       inEditorBadge: "En el editor",
+    },
+    textDefaults: {
+      title: "Texto y Etiquetas",
+      subtitle:
+        "Elige el estilo inicial de los nuevos textos. Luego podrás ajustarlos en vivo o hacer doble clic para editarlos.",
+      defaultBg: "Fondo oscuro",
+      defaultBold: "Negrita (Bold)",
+      defaultItalic: "Cursiva (Italic)",
+      defaultSize: "Tamaño de letra inicial",
+      previewTitle: "Vista previa del texto",
+      previewSample: "Anotación rápida",
+      hint: "En el editor: escribe, haz clic para seleccionar y ajustar o doble clic para volver a editar.",
     },
     macosPermTip: "En macOS, si la captura falla la primera vez, otorga permiso de Grabación de Pantalla.",
     openPermBtn: "Abrir permisos de pantalla",
@@ -206,6 +221,16 @@ export const TRANSLATIONS = {
       toggleShapeToRect: "Cambiar recorte a Rectángulo",
       colorLabel: "Color",
       sizeLabel: "Grosor",
+      textConfigTitle: "Texto:",
+      textWithBg: "Con fondo",
+      textNoBg: "Sin fondo",
+      textBold: "Negrita",
+      textItalic: "Cursiva",
+      textSizeDown: "Reducir tamaño",
+      textSizeUp: "Aumentar tamaño",
+      textEditBtn: "Editar",
+      textDelete: "Eliminar texto",
+      textHint: "Arrastra para mover · Doble clic para editar",
       tooltips: {
         select: { title: "Seleccionar", desc: "Ajusta el recorte o mueve stickers" },
         strokes: { title: "Trazos", desc: "Lápiz libre, resaltador o subrayado" },
@@ -340,6 +365,9 @@ export const TRANSLATIONS = {
       clockCardTitle: "Date & Time Sticker",
       clockCardDesc:
         "Configure default 12h/24h clock format, seconds, date, and visual style.",
+      textCardTitle: "Text & Labels",
+      textCardDesc:
+        "Set the default background, bold, italic, and font size when placing text on captures.",
       configureBtn: "Configure",
       backToExtrasBtn: "Back to Extras",
       photoCardTitle: "Photo / Image Overlay",
@@ -349,6 +377,18 @@ export const TRANSLATIONS = {
       stepsCardDesc:
         "Place sequential step badges with a single click to build visual guides.",
       inEditorBadge: "In editor",
+    },
+    textDefaults: {
+      title: "Text & Labels",
+      subtitle:
+        "Choose the default style for new text annotations. You can also adjust them live or double-click to edit.",
+      defaultBg: "Dark background",
+      defaultBold: "Bold",
+      defaultItalic: "Italic",
+      defaultSize: "Initial font size",
+      previewTitle: "Text preview",
+      previewSample: "Quick note",
+      hint: "In editor: type, click to select and style, or double-click to edit again.",
     },
     macosPermTip: "On macOS, if capture fails initially, grant Screen Recording permission.",
     openPermBtn: "Open Screen Permissions",
@@ -432,6 +472,16 @@ export const TRANSLATIONS = {
       toggleShapeToRect: "Switch crop to Rectangle",
       colorLabel: "Color",
       sizeLabel: "Size",
+      textConfigTitle: "Text:",
+      textWithBg: "With bg",
+      textNoBg: "No bg",
+      textBold: "Bold",
+      textItalic: "Italic",
+      textSizeDown: "Decrease size",
+      textSizeUp: "Increase size",
+      textEditBtn: "Edit",
+      textDelete: "Remove text",
+      textHint: "Drag to move · Double-click to edit",
       tooltips: {
         select: { title: "Select", desc: "Resize crop area or move stickers" },
         strokes: { title: "Strokes", desc: "Freehand pen, highlighter, or underline" },

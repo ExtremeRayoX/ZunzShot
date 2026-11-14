@@ -34,6 +34,10 @@ export interface AppSettings {
   clockShowSeconds: boolean;
   clockShowDate: boolean;
   clockStyle: ClockStickerStyle;
+  textDefaultBg: boolean;
+  textDefaultBold: boolean;
+  textDefaultItalic: boolean;
+  textDefaultSize: number;
 }
 
 export interface WindowCandidate {
@@ -159,6 +163,8 @@ export interface TextAnnotation {
   color: string;
   fontSize: number;
   hasBg: boolean;
+  bold: boolean;
+  italic: boolean;
 }
 
 export type PhotoMaskShape = "rect" | "rounded" | "circle";
