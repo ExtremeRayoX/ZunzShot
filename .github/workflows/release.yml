@@ -59,6 +59,12 @@ jobs:
             - **macOS (Universal):** `ZunzShot___VERSION___universal.dmg` (Apple Silicon e Intel)
             - **Windows (Instalador ligero — recomendado):** `ZunzShot___VERSION___x64-setup.exe`
             - **Windows (Instalador offline completo):** `ZunzShot___VERSION___x64-offline-setup.exe`
+
+            ### Mejoras y correcciones incluidas
+            - Corrección del foco de ventana y respuesta de atajos globales y comandos dentro del lienzo en Windows.
+            - Eliminación de destellos de trazos previos al iniciar nuevas capturas mediante limpieza sincronizada del lienzo y memoria.
+            - Cambio directo de modo al usar atajos de captura con el selector ya abierto.
+            - Descarga directa por sistema operativo desde el README.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

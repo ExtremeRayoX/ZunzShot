@@ -6,13 +6,19 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Descarga&color=06d6c6&style=for-the-badge)](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Disponible-10b981?style=for-the-badge)](#descargas)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas)
 [![Bilingüe](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%2F_English-6366f1?style=for-the-badge)](#funcionalidades-e-íconos)
 
 <br />
 
-[**⬇️ Windows Ligero (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Windows Offline (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ macOS Universal (.dmg)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot para Windows" width="284" /></a>
+&nbsp;&nbsp;
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot para macOS" width="284" /></a>
+
+<br />
+
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot Windows Offline" width="284" /></a>
 
 </div>
 
@@ -20,13 +26,13 @@
 
 ## Descargas
 
-Descarga el instalador más reciente para tu sistema operativo desde [**Releases de GitHub**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest):
+Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Plataforma | Instalador | Detalles |
-| :--- | :--- | :--- |
-| **Windows 10 / 11 (Ligero — recomendado)** | `ZunzShot_*_x64-setup.exe` | Instalador compacto para instalación habitual con conexión a internet. Incluye selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| **Windows 10 / 11 (Offline completo)** | `ZunzShot_*_x64-offline-setup.exe` | Paquete autónomo con motor integrado para instalar en equipos sin acceso a internet, con exactamente las mismas funciones. |
-| **macOS 12.3+ (Apple Silicon e Intel)** | `ZunzShot_*_universal.dmg` | Arrastra **ZunzShot** a **Aplicaciones** y otorga el permiso de **Grabación de Pantalla** al abrirla por primera vez. |
+| Sistema | Plataforma | Descarga directa | Detalles |
+| :---: | :--- | :--- | :--- |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar instalador (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -95,12 +101,16 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 
 ## Notas de Versión
 
+### `v1.0.3`
+- **Arreglo de atajos y foco en Windows:** Corrección de errores de foco de ventana y activación que impedían usar los atajos globales (`Ctrl+Shift+D/X/C/W/F`) y los comandos internos (`Esc`, `Ctrl+C`, `Ctrl+S`, `Ctrl+Shift+P`, `Ctrl+Shift+E`, `Ctrl+P`, deshacer/rehacer y flechas) en Windows.
+- **Eliminación de rastro de trazos previos:** Limpieza sincronizada del lienzo, selecciones y objetos temporales entre capturas para evitar destellos momentáneos de anotaciones anteriores al iniciar una nueva captura.
+- **Limpieza automática de memoria:** Liberación inmediata de caché gráfica e imágenes superpuestas tras cerrar o completar una captura, y cambio directo de modo con el selector abierto.
+- **Descarga directa desde portada:** Botones visuales independientes para Windows y macOS con descarga directa al instante sin pasar por páginas intermedias.
+
 ### `v1.0.2`
-- **Estabilidad y respuesta en Windows:** Corrección integral en el manejo del foco de ventana y del lienzo para garantizar que tanto los atajos globales como los comandos internos (`Esc`, `Ctrl+C`, `Ctrl+S`, `Ctrl+Shift+P`, `Ctrl+Shift+E`, `Ctrl+P`, deshacer/rehacer y flechas) respondan de inmediato sin bloquear la pantalla tras un copiado rápido.
-- **Ciclo de captura limpio y optimizado:** Limpieza sincronizada del lienzo, selecciones y memoria temporal al cerrar o iniciar una captura para evitar por completo destellos momentáneos de trazos o capturas anteriores.
-- **Cambio rápido de modo en vuelo:** Presionar otro atajo de captura con el selector ya abierto cambia al instante entre modos sin encimar capturas.
-- **Permisos simplificados en macOS:** Pantalla de bienvenida de permisos depurada con un único botón directo y detección automática sin botones redundantes.
-- **Documentación renovada:** Guía visual actualizada con los íconos oficiales de cada herramienta y el historial completo de versiones.
+- **Permisos simplificados en macOS:** Flujo de permisos iniciales depurado con un único botón directo y detección automática al conceder el permiso.
+- **Estabilidad de copiado rápido:** Mejoras en el cierre del selector y reintentos del portapapeles tras copiar una selección directa.
+- **Guía visual renovada:** Incorporación de los íconos oficiales de cada herramienta y documentación completa de funciones.
 
 ### `v1.0.1`
 - **Dos opciones de instalador para Windows:** Incorporación de la edición **Ligera** (descarga rápida) junto a la edición **Offline completa** para instalaciones sin conexión.
