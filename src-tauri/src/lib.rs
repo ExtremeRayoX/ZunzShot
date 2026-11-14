@@ -2104,7 +2104,7 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let tray_icon_img = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-win.png"))?;
 
-            let mut tray_builder = TrayIconBuilder::new()
+            let tray_builder = TrayIconBuilder::new()
                 .icon(tray_icon_img)
                 .tooltip("ZunzShot")
                 .menu(&tray_menu)
@@ -2140,9 +2140,7 @@ pub fn run() {
                 });
 
             #[cfg(target_os = "macos")]
-            {
-                tray_builder = tray_builder.icon_as_template(true);
-            }
+            let tray_builder = tray_builder.icon_as_template(true);
 
             let tray = tray_builder.build(app)?;
             {
