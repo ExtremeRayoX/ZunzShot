@@ -61,10 +61,9 @@ jobs:
             - **Windows (Instalador offline completo):** `ZunzShot___VERSION___x64-offline-setup.exe`
 
             ### Mejoras y correcciones incluidas
-            - Control de instancia única en segundo plano y corrección de clic en el ícono de bandeja en Windows.
-            - Detección de conflictos de atajos con el sistema operativo, guardado seguro de combinaciones y foco reforzado en el lienzo.
-            - Posicionamiento y tamaño exacto en configuraciones multi-monitor con DPI mixto para avisos de copiado y capturas fijadas (Pin).
-            - Manejo mejorado de nivel de ventana y limpieza de archivos temporales al compartir, imprimir y guardar.
+            - Sensor ligero de actualizaciones en segundo plano con aviso interactivo para actualizar al instante o posponer el recordatorio.
+            - Nuevo menú de Extras en Ajustes con acceso organizado a la configuración del Sticker de Hora y Fecha.
+            - Barra contextual de Guardar cambios / Descartar integrada dentro de cada sección que aparece solo al modificar algún ajuste.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

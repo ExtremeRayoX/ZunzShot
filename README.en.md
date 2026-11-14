@@ -10,33 +10,33 @@
 
 **Instant, ultra-lightweight, and creative screenshot tool for macOS and Windows.**
 
-[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v104)
-[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v104)
+[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v105)
+[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v105)
 [![Spanish README](https://img.shields.io/badge/Language-English_%7C_Espa%C3%B1ol-6366f1?style=for-the-badge)](README.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.4 for Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.5 for Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.4 for macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.5 for macOS" width="320" /></a>
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline-en.svg" alt="Download ZunzShot v1.0.4 Windows Offline" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline-en.svg" alt="Download ZunzShot v1.0.5 Windows Offline" width="320" /></a>
 
 </div>
 
 ---
 
-## Downloads (`v1.0.4`)
+## Downloads (`v1.0.5`)
 
-Latest available version: **ZunzShot v1.0.4**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
+Latest available version: **ZunzShot v1.0.5**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
 
-| OS | Platform | Direct Download (`v1.0.4`) | Details |
+| OS | Platform | Direct Download (`v1.0.5`) | Details |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Lightweight — recommended)** | [Download v1.0.4 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe) | Compact installer with built-in language selector (**English / Español**) and automatic updates. |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Full Offline)** | [Download v1.0.4 offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe) | Standalone package for offline installation with all dependencies bundled. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.4 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Lightweight — recommended)** | [Download v1.0.5 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-setup.exe) | Compact installer with built-in language selector (**English / Español**) and automatic updates. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Full Offline)** | [Download v1.0.5 offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-offline-setup.exe) | Standalone package for offline installation with all dependencies bundled. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.5 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
 
 > **macOS note:** If Gatekeeper shows an unverified developer prompt on first launch, **right-click → Open** on the app in Applications or run in Terminal:
 > ```bash
@@ -115,6 +115,11 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 ---
 
 ## Release Notes
+
+### `v1.0.5`
+- **Lightweight background update sensor:** Periodic detection of newly published versions while the app stays open in the tray with zero idle CPU overhead, featuring an interactive prompt to **Update now** or **Remind me later**.
+- **Dedicated Extras menu in Settings:** Reorganized creative tools into the **Extras** hub, nesting **Date & Time Sticker** configuration cleanly inside it.
+- **Contextual per-section Save bar:** Moved **Save Changes** (with **Discard**) inside each settings menu (`General`, `Shortcuts`, and `Clock Sticker`), appearing only when unsaved changes are made.
 
 ### `v1.0.4`
 - **Single-instance guard & Windows tray fix:** Prevent duplicate processes and tray icons when launching the app while already running, and fix tray click menu behavior on Windows.

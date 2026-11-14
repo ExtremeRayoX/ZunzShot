@@ -24,7 +24,7 @@ export const TRANSLATIONS = {
     settingsTabs: {
       general: "General",
       shortcuts: "Atajos",
-      stickers: "Sticker de Hora",
+      stickers: "Extras",
       about: "Acerca de",
     },
     aboutSection: {
@@ -35,18 +35,23 @@ export const TRANSLATIONS = {
       checkUpdatesBtn: "Buscar actualizaciones",
       checking: "Consultando actualizaciones en GitHub...",
       upToDateMsg: "Tienes la versión más reciente instalada.",
-      autoUpdateLabel: "Buscar e instalar actualizaciones automáticamente al iniciar",
+      autoUpdateLabel: "Buscar actualizaciones automáticamente (al iniciar y en segundo plano)",
       autoUpdateHint:
-        "Descarga e instala nuevas versiones desde GitHub automáticamente al abrir la aplicación.",
+        "Comprueba periódicamente sin consumir recursos si se publicó una nueva versión y te avisa para elegir si actualizar al instante o recordar más tarde.",
       welcomeUpdaterOptIn: "Activar actualizaciones automáticas",
       welcomeUpdaterSub:
-        "Mantén ZunzShot al día descargando nuevas versiones desde GitHub (puedes cambiarlo luego en Configuración).",
+        "Mantén ZunzShot al día buscando nuevas versiones desde GitHub (puedes cambiarlo luego en Configuración).",
       onboardingTitle: "Actualizaciones automáticas",
       onboardingSubtitle:
-        "¿Deseas activar el actualizador automático para descargar e instalar mejoras desde GitHub al iniciar?",
+        "¿Deseas activar el detector de actualizaciones para avisarte cuando haya mejoras publicadas en GitHub?",
       onboardingEnableBtn: "Activar actualizaciones automáticas",
       onboardingSkipBtn: "Ahora no (actualizar manualmente)",
       updateAvailableTitle: "Nueva versión disponible:",
+      updatePromptTitle: "¡Nueva versión disponible!",
+      updatePromptSubtitle:
+        "Se ha publicado una nueva versión de ZunzShot. ¿Deseas actualizar ahora o prefieres que te lo recordemos más tarde?",
+      updateNowBtn: "Actualizar ahora",
+      remindLaterBtn: "Recordar más tarde",
       installUpdateBtn: "Descargar e instalar",
       downloading: "Descargando actualización...",
       installing: "Instalando y reiniciando ZunzShot...",
@@ -99,7 +104,26 @@ export const TRANSLATIONS = {
       neon: "Neón Cian",
     },
     saveSettings: "Guardar cambios",
+    discardChanges: "Descartar",
+    unsavedChangesHint: "Tienes cambios sin guardar en esta sección",
     savedToast: "Configuración guardada",
+    extrasMenu: {
+      title: "Extras y Stickers",
+      subtitle:
+        "Herramientas adicionales disponibles dentro del botón Extras de la barra de captura.",
+      clockCardTitle: "Sticker de Hora y Fecha",
+      clockCardDesc:
+        "Configura el formato de hora (12h/24h), segundos, fecha y estilo visual por defecto.",
+      configureBtn: "Configurar",
+      backToExtrasBtn: "Volver a Extras",
+      photoCardTitle: "Foto / Imagen superpuesta",
+      photoCardDesc:
+        "Inserta imágenes estáticas desde archivo o pegando con ⌘/Ctrl + V, con recorte cuadrado, redondeado o circular.",
+      stepsCardTitle: "Pasos numerados (1, 2, 3...)",
+      stepsCardDesc:
+        "Coloca marcadores consecutivos en un clic para crear tutoriales y guías rápidas.",
+      inEditorBadge: "En el editor",
+    },
     macosPermTip: "En macOS, si la captura falla la primera vez, otorga permiso de Grabación de Pantalla.",
     openPermBtn: "Abrir permisos de pantalla",
     captureErrorTitle: "No se pudo capturar la pantalla",
@@ -226,7 +250,7 @@ export const TRANSLATIONS = {
     settingsTabs: {
       general: "General",
       shortcuts: "Shortcuts",
-      stickers: "Time Sticker",
+      stickers: "Extras",
       about: "About",
     },
     aboutSection: {
@@ -237,18 +261,23 @@ export const TRANSLATIONS = {
       checkUpdatesBtn: "Check for Updates",
       checking: "Checking GitHub for updates...",
       upToDateMsg: "You are running the latest available version.",
-      autoUpdateLabel: "Automatically check & install updates on startup",
+      autoUpdateLabel: "Automatically check for updates (on startup & in background)",
       autoUpdateHint:
-        "Automatically downloads and installs new releases from GitHub when the app starts.",
+        "Periodically checks GitHub in the background with zero overhead and notifies you to update now or be reminded later.",
       welcomeUpdaterOptIn: "Enable automatic updates",
       welcomeUpdaterSub:
-        "Keep ZunzShot up to date by downloading new releases from GitHub (changeable anytime in Settings).",
+        "Keep ZunzShot up to date by checking for new releases from GitHub (changeable anytime in Settings).",
       onboardingTitle: "Automatic Updates",
       onboardingSubtitle:
-        "Would you like to turn on automatic updates so ZunzShot downloads and installs new GitHub releases on startup?",
+        "Would you like to turn on background update checks so ZunzShot notifies you when new GitHub releases are published?",
       onboardingEnableBtn: "Enable automatic updates",
       onboardingSkipBtn: "Not now (manual updates)",
       updateAvailableTitle: "New version available:",
+      updatePromptTitle: "New version available!",
+      updatePromptSubtitle:
+        "A new version of ZunzShot has been published. Would you like to update now or be reminded later?",
+      updateNowBtn: "Update now",
+      remindLaterBtn: "Remind me later",
       installUpdateBtn: "Download & Install",
       downloading: "Downloading update...",
       installing: "Installing & restarting ZunzShot...",
@@ -301,7 +330,26 @@ export const TRANSLATIONS = {
       neon: "Cyan Neon",
     },
     saveSettings: "Save Changes",
+    discardChanges: "Discard",
+    unsavedChangesHint: "You have unsaved changes in this section",
     savedToast: "Settings saved",
+    extrasMenu: {
+      title: "Extras & Stickers",
+      subtitle:
+        "Additional creative tools available inside the Extras button on the capture toolbar.",
+      clockCardTitle: "Date & Time Sticker",
+      clockCardDesc:
+        "Configure default 12h/24h clock format, seconds, date, and visual style.",
+      configureBtn: "Configure",
+      backToExtrasBtn: "Back to Extras",
+      photoCardTitle: "Photo / Image Overlay",
+      photoCardDesc:
+        "Insert static images from disk or by pasting with ⌘/Ctrl + V, with square, rounded, or circular masks.",
+      stepsCardTitle: "Numbered Steps (1, 2, 3...)",
+      stepsCardDesc:
+        "Place sequential step badges with a single click to build visual guides.",
+      inEditorBadge: "In editor",
+    },
     macosPermTip: "On macOS, if capture fails initially, grant Screen Recording permission.",
     openPermBtn: "Open Screen Permissions",
     captureErrorTitle: "Screen capture failed",

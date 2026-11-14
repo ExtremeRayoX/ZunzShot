@@ -6,21 +6,27 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   AlertTriangle,
   AppWindow,
+  ArrowLeft,
+  Bell,
   Camera,
   Check,
+  ChevronRight,
   Circle,
   Clock,
   Download,
   FolderOpen,
   Globe,
+  Image as ImageIcon,
   Info,
   Keyboard,
+  ListOrdered,
   Lock,
   Maximize2,
   RefreshCw,
   RotateCcw,
   Settings,
   ShieldCheck,
+  Sparkles,
   Square,
   Zap,
 } from "lucide-react";
@@ -80,10 +86,13 @@ const OVERLAY_CMD_FIELDS: readonly OverlayCommandKey[] = [
 
 export const SettingsApp: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.0.4");
+  const [appVersion, setAppVersion] = useState<string>("1.0.5");
   const [tab, setTab] = useState<TabId>("capture");
+  const [extrasSubView, setExtrasSubView] = useState<"list" | "clock">("list");
+  const [showUpdatePromptModal, setShowUpdatePromptModal] = useState<boolean>(false);
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -101,6 +110,14 @@ export const SettingsApp: React.FC = () => {
   const shortcutSavedRef = useRef<boolean>(false);
   const settingsRef = useRef<AppSettings | null>(null);
   settingsRef.current = settings;
+  const updateStateRef = useRef(updateState);
+  updateStateRef.current = updateState;
+
+  useEffect(() => {
+    if (tab !== "stickers") {
+      setExtrasSubView("list");
+    }
+  }, [tab]);
 
   useEffect(() => {
     return () => {
@@ -169,7 +186,10 @@ export const SettingsApp: React.FC = () => {
   };
 
   useEffect(() => {
-    void invoke<AppSettings>("get_settings").then(setSettings);
+    void invoke<AppSettings>("get_settings").then((loaded) => {
+      setSettings(loaded);
+      setSavedSettings(loaded);
+    });
     void invoke<string>("get_platform").then(setPlatform);
     void invoke<boolean>("check_screen_capture_permission").then(setHasPermission);
     void invoke<string>("get_app_version").then(setAppVersion);
@@ -185,6 +205,14 @@ export const SettingsApp: React.FC = () => {
       } else if (pending === "check-updates") {
         setTab("about");
         void runUpdateCheck();
+      } else if (pending === "update-prompt") {
+        setShowUpdatePromptModal(true);
+        if (
+          updateStateRef.current !== "downloading" &&
+          updateStateRef.current !== "installing"
+        ) {
+          void runUpdateCheck();
+        }
       } else if (pending === "general") {
         setTab("general");
       } else if (pending === "capture") {
@@ -202,6 +230,7 @@ export const SettingsApp: React.FC = () => {
       "zunzshot://settings-updated",
       (ev) => {
         setSettings(ev.payload);
+        setSavedSettings(ev.payload);
       }
     );
     const unlistenShortcuts = listen<string[]>(
@@ -211,11 +240,20 @@ export const SettingsApp: React.FC = () => {
       }
     );
     const unlistenTab = listen<string>("zunzshot://open-tab", (ev) => {
+      void invoke("consume_pending_tab").catch(() => {});
       if (ev.payload === "about") {
         setTab("about");
       } else if (ev.payload === "check-updates") {
         setTab("about");
         void runUpdateCheck();
+      } else if (ev.payload === "update-prompt") {
+        setShowUpdatePromptModal(true);
+        if (
+          updateStateRef.current !== "downloading" &&
+          updateStateRef.current !== "installing"
+        ) {
+          void runUpdateCheck();
+        }
       } else if (ev.payload === "general") {
         setTab("general");
       } else if (ev.payload === "capture") {
@@ -326,21 +364,12 @@ export const SettingsApp: React.FC = () => {
       }
 
       const updated: AppSettings = { ...currentSettings, [recordingField]: nextCombo };
-      shortcutSavedRef.current = true;
+      shortcutSavedRef.current = false;
+      setSettings(updated);
       setRecordingField(null);
       setLiveTokens([]);
       setShortcutError(null);
-      void invoke<AppSettings>("save_settings_cmd", { newSettings: updated })
-        .then((saved) => {
-          setSettings(saved);
-          setSavedBanner(true);
-          window.setTimeout(() => setSavedBanner(false), 1800);
-        })
-        .catch((err) => {
-          shortcutSavedRef.current = false;
-          setShortcutError(err instanceof Error ? err.message : String(err ?? ""));
-          void invoke("set_shortcuts_paused", { paused: false });
-        });
+      void invoke("set_shortcuts_paused", { paused: false }).catch(() => {});
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -384,7 +413,10 @@ export const SettingsApp: React.FC = () => {
       const updated = await invoke<AppSettings>("set_language_cmd", {
         language: newLang,
       });
-      setSettings(updated);
+      setSavedSettings(updated);
+      setSettings((prev) =>
+        prev ? { ...prev, language: updated.language } : updated
+      );
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err ?? ""));
     }
@@ -401,6 +433,7 @@ export const SettingsApp: React.FC = () => {
         autoCheckUpdates,
       });
       setSettings(updated);
+      setSavedSettings(updated);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err ?? ""));
     }
@@ -414,11 +447,93 @@ export const SettingsApp: React.FC = () => {
         newSettings: next,
       });
       setSettings(saved);
+      setSavedSettings(saved);
       setSavedBanner(true);
       setTimeout(() => setSavedBanner(false), 1800);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err ?? ""));
     }
+  };
+
+  const handleModalUpdateNow = () => {
+    setShowUpdatePromptModal(false);
+    setTab("about");
+    void installAvailableUpdate();
+  };
+
+  const handleModalRemindLater = () => {
+    setShowUpdatePromptModal(false);
+    void invoke("postpone_update_reminder", {
+      version: availableUpdate?.version ?? null,
+    }).catch(() => {});
+  };
+
+  const isGeneralDirty = Boolean(
+    settings &&
+      savedSettings &&
+      (settings.saveFolder !== savedSettings.saveFolder ||
+        settings.outputFormat !== savedSettings.outputFormat ||
+        settings.launchAtStartup !== savedSettings.launchAtStartup ||
+        settings.showMagnifier !== savedSettings.showMagnifier ||
+        settings.autoCheckUpdates !== savedSettings.autoCheckUpdates ||
+        settings.ultraLightMode !== savedSettings.ultraLightMode)
+  );
+
+  const isShortcutsDirty = Boolean(
+    settings &&
+      savedSettings &&
+      (settings.shortcutRegion !== savedSettings.shortcutRegion ||
+        settings.shortcutQuickCopy !== savedSettings.shortcutQuickCopy ||
+        settings.shortcutCircle !== savedSettings.shortcutCircle ||
+        settings.shortcutWindow !== savedSettings.shortcutWindow ||
+        settings.shortcutFullscreen !== savedSettings.shortcutFullscreen ||
+        settings.cmdCopy !== savedSettings.cmdCopy ||
+        settings.cmdSave !== savedSettings.cmdSave ||
+        settings.cmdPin !== savedSettings.cmdPin ||
+        settings.cmdShare !== savedSettings.cmdShare ||
+        settings.cmdPrint !== savedSettings.cmdPrint ||
+        settings.cmdCancel !== savedSettings.cmdCancel)
+  );
+
+  const isStickersDirty = Boolean(
+    settings &&
+      savedSettings &&
+      (settings.clockFormat24h !== savedSettings.clockFormat24h ||
+        settings.clockShowSeconds !== savedSettings.clockShowSeconds ||
+        settings.clockShowDate !== savedSettings.clockShowDate ||
+        settings.clockStyle !== savedSettings.clockStyle)
+  );
+
+  const renderInMenuSaveBar = (isDirty: boolean, onDiscard: () => void) => {
+    if (!settings) return null;
+    if (!isDirty) {
+      return savedBanner ? (
+        <div className="in-menu-saved-toast">
+          <Check size={14} /> {t.savedToast}
+        </div>
+      ) : null;
+    }
+    return (
+      <div className="in-menu-save-bar">
+        <span className="in-menu-save-bar-hint">{t.unsavedChangesHint}</span>
+        <div className="in-menu-save-bar-actions">
+          <button
+            type="button"
+            className="secondary-btn small"
+            onClick={onDiscard}
+          >
+            {t.discardChanges}
+          </button>
+          <button
+            type="button"
+            className="primary-cta small"
+            onClick={() => void handleSaveSettings(settings)}
+          >
+            {t.saveSettings}
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const handlePickFolder = async () => {
@@ -716,9 +831,12 @@ export const SettingsApp: React.FC = () => {
             </button>
             <button
               className={`sidebar-btn ${tab === "stickers" ? "active" : ""}`}
-              onClick={() => setTab("stickers")}
+              onClick={() => {
+                setTab("stickers");
+                setExtrasSubView("list");
+              }}
             >
-              <Clock size={15} />
+              <Sparkles size={15} />
               <span>{t.settingsTabs.stickers}</span>
             </button>
           </div>
@@ -933,6 +1051,22 @@ export const SettingsApp: React.FC = () => {
                 </button>
               </div>
             )}
+
+            {renderInMenuSaveBar(isGeneralDirty, () =>
+              setSettings((prev) =>
+                prev && savedSettings
+                  ? {
+                      ...prev,
+                      saveFolder: savedSettings.saveFolder,
+                      outputFormat: savedSettings.outputFormat,
+                      launchAtStartup: savedSettings.launchAtStartup,
+                      showMagnifier: savedSettings.showMagnifier,
+                      autoCheckUpdates: savedSettings.autoCheckUpdates,
+                      ultraLightMode: savedSettings.ultraLightMode,
+                    }
+                  : prev
+              )
+            )}
           </div>
         )}
 
@@ -947,7 +1081,7 @@ export const SettingsApp: React.FC = () => {
                       setRecordingField(null);
                       setLiveTokens([]);
                       setShortcutError(null);
-                      void handleSaveSettings({
+                      setSettings({
                         ...settings,
                         ...DEFAULT_GLOBAL_SHORTCUTS,
                         ...DEFAULT_OVERLAY_COMMANDS,
@@ -1014,11 +1148,96 @@ export const SettingsApp: React.FC = () => {
                   </span>
                 </div>
               )}
+
+              {renderInMenuSaveBar(isShortcutsDirty, () =>
+                setSettings((prev) =>
+                  prev && savedSettings
+                    ? {
+                        ...prev,
+                        shortcutRegion: savedSettings.shortcutRegion,
+                        shortcutQuickCopy: savedSettings.shortcutQuickCopy,
+                        shortcutCircle: savedSettings.shortcutCircle,
+                        shortcutWindow: savedSettings.shortcutWindow,
+                        shortcutFullscreen: savedSettings.shortcutFullscreen,
+                        cmdCopy: savedSettings.cmdCopy,
+                        cmdSave: savedSettings.cmdSave,
+                        cmdPin: savedSettings.cmdPin,
+                        cmdShare: savedSettings.cmdShare,
+                        cmdPrint: savedSettings.cmdPrint,
+                        cmdCancel: savedSettings.cmdCancel,
+                      }
+                    : prev
+                )
+              )}
             </div>
           )}
 
-        {tab === "stickers" && (
+        {tab === "stickers" && extrasSubView === "list" && (
+          <div className="extras-hub">
+            <div className="extras-hub-head">
+              <h2>{t.extrasMenu.title}</h2>
+              <p className="muted-info">{t.extrasMenu.subtitle}</p>
+            </div>
+            <div className="extras-list">
+              <button
+                type="button"
+                className="extras-item-card interactive"
+                onClick={() => setExtrasSubView("clock")}
+              >
+                <div className="extras-card-icon accent">
+                  <Clock size={20} />
+                </div>
+                <div className="extras-card-body">
+                  <strong>{t.extrasMenu.clockCardTitle}</strong>
+                  <span>{t.extrasMenu.clockCardDesc}</span>
+                </div>
+                <div className="extras-card-meta">
+                  <span className="extras-config-pill">{t.extrasMenu.configureBtn}</span>
+                  <ChevronRight size={16} />
+                </div>
+              </button>
+
+              <div className="extras-item-card">
+                <div className="extras-card-icon">
+                  <ImageIcon size={20} />
+                </div>
+                <div className="extras-card-body">
+                  <strong>{t.extrasMenu.photoCardTitle}</strong>
+                  <span>{t.extrasMenu.photoCardDesc}</span>
+                </div>
+                <div className="extras-card-meta">
+                  <span className="extras-badge">{t.extrasMenu.inEditorBadge}</span>
+                </div>
+              </div>
+
+              <div className="extras-item-card">
+                <div className="extras-card-icon">
+                  <ListOrdered size={20} />
+                </div>
+                <div className="extras-card-body">
+                  <strong>{t.extrasMenu.stepsCardTitle}</strong>
+                  <span>{t.extrasMenu.stepsCardDesc}</span>
+                </div>
+                <div className="extras-card-meta">
+                  <span className="extras-badge">{t.extrasMenu.inEditorBadge}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "stickers" && extrasSubView === "clock" && (
           <div className="form-stack">
+            <div className="extras-subview-head">
+              <button
+                type="button"
+                className="secondary-btn small"
+                onClick={() => setExtrasSubView("list")}
+              >
+                <ArrowLeft size={14} /> {t.extrasMenu.backToExtrasBtn}
+              </button>
+              <span className="extras-subview-title">{t.extrasMenu.clockCardTitle}</span>
+            </div>
             <p className="muted-info">{t.clockDefaultsTitle}</p>
 
             <div className="toggle-grid">
@@ -1099,6 +1318,20 @@ export const SettingsApp: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {renderInMenuSaveBar(isStickersDirty, () =>
+              setSettings((prev) =>
+                prev && savedSettings
+                  ? {
+                      ...prev,
+                      clockFormat24h: savedSettings.clockFormat24h,
+                      clockShowSeconds: savedSettings.clockShowSeconds,
+                      clockShowDate: savedSettings.clockShowDate,
+                      clockStyle: savedSettings.clockStyle,
+                    }
+                  : prev
+              )
+            )}
           </div>
         )}
 
@@ -1228,22 +1461,66 @@ export const SettingsApp: React.FC = () => {
 
       <footer className="settings-footer">
         <span className="tray-note">{t.trayHint}</span>
-        {(tab === "general" || tab === "shortcuts" || tab === "stickers") && (
-          <div className="footer-actions">
-            {savedBanner && (
-              <span className="saved-pill">
-                <Check size={14} /> {t.savedToast}
-              </span>
-            )}
-            <button
-              className="primary-cta small"
-              onClick={() => void handleSaveSettings(settings)}
-            >
-              {t.saveSettings}
-            </button>
-          </div>
-        )}
       </footer>
+
+      {showUpdatePromptModal && (
+        <div
+          className="update-prompt-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="update-prompt-title"
+        >
+          <div className="update-prompt-modal">
+            <div className="update-prompt-head">
+              <div className="update-prompt-icon">
+                <Bell size={20} />
+              </div>
+              <div className="update-prompt-title-wrap">
+                <h2 id="update-prompt-title">{t.aboutSection.updatePromptTitle}</h2>
+                {availableUpdate && (
+                  <span className="version-badge-mini">
+                    v{appVersion} → v{availableUpdate.version}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <p className="update-prompt-sub">{t.aboutSection.updatePromptSubtitle}</p>
+
+            {updateState === "checking" && (
+              <div className="update-prompt-status">
+                <RefreshCw size={14} className="spin" />
+                <span>...</span>
+              </div>
+            )}
+
+            {updateErrorMsg && updateState === "error" && (
+              <div className="update-prompt-error">
+                <AlertTriangle size={14} />
+                <span>{updateErrorMsg}</span>
+              </div>
+            )}
+
+            <div className="update-prompt-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={handleModalRemindLater}
+              >
+                {t.aboutSection.remindLaterBtn}
+              </button>
+              <button
+                type="button"
+                className="primary-cta small"
+                disabled={!availableUpdate || updateState === "checking"}
+                onClick={() => void handleModalUpdateNow()}
+              >
+                <Download size={14} /> {t.aboutSection.updateNowBtn}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

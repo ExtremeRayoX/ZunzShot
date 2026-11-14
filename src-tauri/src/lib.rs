@@ -29,7 +29,9 @@ use tauri_plugin_updater::UpdaterExt;
 static ALLOW_APP_EXIT: AtomicBool = AtomicBool::new(false);
 static SINGLE_INSTANCE_SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 const SINGLE_INSTANCE_ADDR: &str = "127.0.0.1:45893";
-static AUTO_UPDATE_CHECKED: AtomicBool = AtomicBool::new(false);
+static UPDATE_SENSOR_STARTED: AtomicBool = AtomicBool::new(false);
+static UPDATE_SENSOR_SIGNAL: std::sync::LazyLock<(Mutex<u64>, std::sync::Condvar)> =
+    std::sync::LazyLock::new(|| (Mutex::new(0), std::sync::Condvar::new()));
 static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static SHORTCUTS_PAUSED: AtomicBool = AtomicBool::new(false);
 static SHORTCUT_OP_LOCK: std::sync::LazyLock<Mutex<()>> =
@@ -105,6 +107,8 @@ pub struct AppState {
     pub pending_tab: Option<String>,
     pub pending_capture_error: Option<String>,
     pub pinned_images: HashMap<String, Vec<u8>>,
+    pub postponed_update: Option<(String, std::time::Instant)>,
+    pub notified_update: Option<(String, std::time::Instant)>,
 }
 
 enum SingleInstanceOutcome {
@@ -691,7 +695,7 @@ fn save_settings_cmd(
     register_shortcuts(&app, &new_settings);
     let _ = app.emit("zunzshot://settings-updated", &new_settings);
     if new_settings.auto_check_updates {
-        maybe_spawn_auto_update(&app, 1);
+        trigger_update_sensor(&app, 1);
     }
     Ok(new_settings)
 }
@@ -738,7 +742,7 @@ fn complete_onboarding_cmd(
     refresh_tray_menu(&app);
     let _ = app.emit("zunzshot://settings-updated", &updated);
     if updated.auto_check_updates {
-        maybe_spawn_auto_update(&app, 1);
+        trigger_update_sensor(&app, 1);
     }
     Ok(updated)
 }
@@ -1950,41 +1954,127 @@ fn get_app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-fn maybe_spawn_auto_update(app: &AppHandle, delay_secs: u64) {
-    if AUTO_UPDATE_CHECKED.swap(true, Ordering::Relaxed) {
+fn signal_update_sensor() {
+    let (lock, cvar) = &*UPDATE_SENSOR_SIGNAL;
+    if let Ok(mut seq) = lock.lock() {
+        *seq = seq.wrapping_add(1);
+        cvar.notify_all();
+    }
+}
+
+fn wait_sensor_interval(duration: Duration) -> bool {
+    let (lock, cvar) = &*UPDATE_SENSOR_SIGNAL;
+    let Ok(guard) = lock.lock() else {
+        std::thread::sleep(duration);
+        return false;
+    };
+    let start_seq = *guard;
+    let deadline = std::time::Instant::now() + duration;
+    let mut current = guard;
+    while !SINGLE_INSTANCE_SHUTTING_DOWN.load(Ordering::Relaxed) && *current == start_seq {
+        let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
+            return false;
+        };
+        if remaining.is_zero() {
+            return false;
+        }
+        let Ok((next_guard, timeout)) = cvar.wait_timeout(current, remaining) else {
+            return false;
+        };
+        current = next_guard;
+        if timeout.timed_out() {
+            return false;
+        }
+    }
+    true
+}
+
+#[tauri::command]
+fn postpone_update_reminder(state: State<'_, Mutex<AppState>>, version: Option<String>) {
+    let mut guard = state.lock().unwrap();
+    if guard.pending_tab.as_deref() == Some("update-prompt") {
+        guard.pending_tab = None;
+    }
+    let target_ver = version.or_else(|| guard.notified_update.as_ref().map(|(v, _)| v.clone()));
+    if let Some(ver) = target_ver {
+        guard.postponed_update = Some((ver, std::time::Instant::now()));
+    }
+}
+
+fn trigger_update_sensor(app: &AppHandle, initial_delay_secs: u64) {
+    if UPDATE_SENSOR_STARTED.swap(true, Ordering::SeqCst) {
+        signal_update_sensor();
         return;
     }
+
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if delay_secs > 0 {
+        if initial_delay_secs > 0 {
             let _ = tauri::async_runtime::spawn_blocking(move || {
-                std::thread::sleep(Duration::from_secs(delay_secs));
+                wait_sensor_interval(Duration::from_secs(initial_delay_secs));
             })
             .await;
         }
-        let can_check = handle
-            .try_state::<Mutex<AppState>>()
-            .and_then(|s| s.lock().ok().map(|g| g.settings.auto_check_updates && g.active_session.is_none()))
-            .unwrap_or(false);
-        if !can_check {
-            return;
-        }
-        let Ok(updater) = handle.updater() else {
-            return;
-        };
-        let Ok(Some(update)) = updater.check().await else {
-            return;
-        };
-        if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
-            let capture_active = handle
+
+        const CHECK_INTERVAL_SECS: u64 = 2 * 3600;
+        const SNOOZE_SECS: u64 = 4 * 3600;
+
+        while !SINGLE_INSTANCE_SHUTTING_DOWN.load(Ordering::Relaxed) {
+            let can_check = handle
                 .try_state::<Mutex<AppState>>()
-                .and_then(|s| s.lock().ok().map(|g| g.active_session.is_some()))
+                .and_then(|s| {
+                    s.lock()
+                        .ok()
+                        .map(|g| g.settings.auto_check_updates && g.active_session.is_none())
+                })
                 .unwrap_or(false);
-            if !capture_active {
-                SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
-                ALLOW_APP_EXIT.store(true, Ordering::Relaxed);
-                handle.restart();
+
+            if can_check {
+                if let Ok(updater) = handle.updater() {
+                    if let Ok(Some(update)) = updater.check().await {
+                        let should_notify = handle
+                            .try_state::<Mutex<AppState>>()
+                            .and_then(|s| {
+                                s.lock().ok().map(|mut guard| {
+                                    if guard.active_session.is_some() {
+                                        return false;
+                                    }
+                                    let snoozed = guard.postponed_update.as_ref().is_some_and(
+                                        |(ver, at)| {
+                                            ver == &update.version
+                                                && at.elapsed() < Duration::from_secs(SNOOZE_SECS)
+                                        },
+                                    );
+                                    let recently_notified = guard
+                                        .notified_update
+                                        .as_ref()
+                                        .is_some_and(|(ver, at)| {
+                                            ver == &update.version
+                                                && at.elapsed() < Duration::from_secs(SNOOZE_SECS)
+                                        });
+                                    if snoozed || recently_notified {
+                                        return false;
+                                    }
+                                    guard.notified_update =
+                                        Some((update.version.clone(), std::time::Instant::now()));
+                                    guard.pending_tab = Some("update-prompt".to_string());
+                                    true
+                                })
+                            })
+                            .unwrap_or(false);
+
+                        if should_notify {
+                            show_settings_window(&handle);
+                            let _ = handle.emit("zunzshot://open-tab", "update-prompt");
+                        }
+                    }
+                }
             }
+
+            let _ = tauri::async_runtime::spawn_blocking(|| {
+                wait_sensor_interval(Duration::from_secs(CHECK_INTERVAL_SECS));
+            })
+            .await;
         }
     });
 }
@@ -2061,6 +2151,7 @@ pub fn run() {
             close_pinned_window,
             consume_pending_tab,
             consume_pending_capture_error,
+            postpone_update_reminder,
             open_screen_recording_settings,
             check_screen_capture_permission,
             request_screen_capture_permission,
@@ -2095,6 +2186,8 @@ pub fn run() {
                 pending_tab: None,
                 pending_capture_error: None,
                 pinned_images: HashMap::new(),
+                postponed_update: None,
+                notified_update: None,
             }));
 
             let tray_menu = build_tray_menu(app.handle(), lang)?;
@@ -2113,6 +2206,7 @@ pub fn run() {
                     let id = event.id().as_ref();
                     if id == "quit" {
                         SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+                        signal_update_sensor();
                         ALLOW_APP_EXIT.store(true, Ordering::Relaxed);
                         app.exit(0);
                         return;
@@ -2162,7 +2256,7 @@ pub fn run() {
             }
 
             if initial_settings.auto_check_updates {
-                maybe_spawn_auto_update(app.handle(), 4);
+                trigger_update_sensor(app.handle(), 6);
             }
 
             Ok(())

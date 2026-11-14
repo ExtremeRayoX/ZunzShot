@@ -1,6 +1,6 @@
 [package]
 name = "zunzshot"
-version = "1.0.4"
+version = "1.0.5"
 description = "ZunzShot — Fast, ultra-lightweight cross-platform screenshot & annotation utility"
 authors = ["ERX"]
 edition = "2021"

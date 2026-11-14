@@ -10,33 +10,33 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v104)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v104)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v105)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v105)
 [![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.4 para Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.5 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.4 para macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.5 para macOS" width="320" /></a>
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot v1.0.4 Windows Offline" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot v1.0.5 Windows Offline" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas (`v1.0.4`)
+## Descargas (`v1.0.5`)
 
-Versión actual disponible: **ZunzShot v1.0.4**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.0.5**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa (`v1.0.4`) | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.0.5`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar v1.0.4 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar v1.0.4 offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.4 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar v1.0.5 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar v1.0.5 offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.5 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.5/ZunzShot_1.0.5_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -115,6 +115,11 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ---
 
 ## Notas de Versión
+
+### `v1.0.5`
+- **Sensor ligero de actualizaciones en segundo plano:** Detección periódica de nuevas versiones mientras la aplicación permanece abierta sin impacto en CPU ni memoria, con aviso interactivo para **Actualizar ahora** o **Recordar más tarde**.
+- **Nuevo menú de Extras en Ajustes:** Reorganización de las herramientas creativas en una sección dedicada **Extras**, integrando dentro de ella la configuración del **Sticker de Hora y Fecha**.
+- **Guardado contextual por sección:** El botón **Guardar cambios** (junto con la opción **Descartar**) ahora se muestra dentro de cada menú (`General`, `Atajos` y `Sticker de Hora`) únicamente cuando se detectan modificaciones sin guardar.
 
 ### `v1.0.4`
 - **Instancia única y bandeja del sistema en Windows:** Prevención de procesos e íconos duplicados al abrir la aplicación cuando ya está en ejecución y corrección de respuesta al clic en la bandeja del sistema.
