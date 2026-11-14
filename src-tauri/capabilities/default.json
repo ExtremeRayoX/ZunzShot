@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities for ZunzShot main and overlay windows",
-  "windows": ["main", "overlay", "pin-*", "copy-toast-*"],
+  "windows": ["main", "overlay", "overlay-*", "pin-*", "copy-toast-*"],
   "permissions": [
     "core:default",
     "core:window:default",

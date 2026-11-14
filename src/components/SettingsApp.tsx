@@ -39,14 +39,15 @@ import type {
   Language,
 } from "../types/zunzshot";
 import {
-  codeToHotkeyToken,
   DEFAULT_GLOBAL_SHORTCUTS,
   DEFAULT_OVERLAY_COMMANDS,
   formatKeyLabel,
   formatShortcutBadge,
   getEventModifiers,
   isModifierKeyEvent,
+  isSingleGlobalShortcutAllowed,
   normalizeAccelerator,
+  resolveRecordedHotkeyToken,
 } from "../utils/shortcuts";
 
 type TabId = "capture" | "general" | "shortcuts" | "stickers" | "about";
@@ -298,10 +299,66 @@ export const SettingsApp: React.FC = () => {
     }
 
     shortcutSavedRef.current = false;
+    let committed = false;
     const isOverlayCmd = (OVERLAY_CMD_FIELDS as readonly string[]).includes(
       recordingField
     );
     void invoke("set_shortcuts_paused", { paused: true });
+
+    const tryCommitShortcut = (mainToken: string | null, mods: string[]) => {
+      if (committed) return;
+      const currentSettings = settingsRef.current;
+      if (!currentSettings) return;
+
+      if (!mainToken) {
+        setLiveTokens(mods);
+        setShortcutError(t.shortcutUnsupportedKey);
+        return;
+      }
+
+      if (
+        !isOverlayCmd &&
+        mods.length === 0 &&
+        !isSingleGlobalShortcutAllowed(mainToken, platform)
+      ) {
+        setLiveTokens([mainToken]);
+        setShortcutError(
+          platform === "windows"
+            ? t.shortcutNeedMoreKeysWindows
+            : t.shortcutNeedMoreKeys
+        );
+        return;
+      }
+
+      const comboTokens = [...mods, mainToken];
+      setLiveTokens(comboTokens);
+
+      const nextCombo = comboTokens.join("+");
+      const nextNorm = normalizeAccelerator(nextCombo, platform);
+      const groupFields: readonly ShortcutFieldKey[] = isOverlayCmd
+        ? OVERLAY_CMD_FIELDS
+        : GLOBAL_SHORTCUT_FIELDS;
+      const hasConflict = groupFields.some(
+        (f) =>
+          f !== recordingField &&
+          normalizeAccelerator(currentSettings[f], platform) === nextNorm
+      );
+      if (hasConflict) {
+        setShortcutError(
+          isOverlayCmd ? t.shortcutOverlayDuplicateErr : t.shortcutDuplicateErr
+        );
+        return;
+      }
+
+      committed = true;
+      const updated: AppSettings = { ...currentSettings, [recordingField]: nextCombo };
+      shortcutSavedRef.current = false;
+      setSettings(updated);
+      setRecordingField(null);
+      setLiveTokens([]);
+      setShortcutError(null);
+      void invoke("set_shortcuts_paused", { paused: false }).catch(() => {});
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -329,51 +386,18 @@ export const SettingsApp: React.FC = () => {
         return;
       }
 
-      const mainToken = codeToHotkeyToken(e.code);
-
-      // Global shortcuts always require > 1 key (modifier + main key)
-      if (!isOverlayCmd && mods.length === 0) {
-        setLiveTokens(mainToken ? [mainToken] : [e.key.toUpperCase()]);
-        setShortcutError(t.shortcutNeedMoreKeys);
-        return;
-      }
-
-      if (!mainToken) {
-        setLiveTokens(mods);
-        setShortcutError(t.shortcutUnsupportedKey);
-        return;
-      }
-
-      const comboTokens = [...mods, mainToken];
-      setLiveTokens(comboTokens);
-
-      const nextCombo = comboTokens.join("+");
-      const nextNorm = normalizeAccelerator(nextCombo, platform);
-      const groupFields: readonly ShortcutFieldKey[] = isOverlayCmd
-        ? OVERLAY_CMD_FIELDS
-        : GLOBAL_SHORTCUT_FIELDS;
-      const hasConflict = groupFields.some(
-        (f) =>
-          f !== recordingField &&
-          normalizeAccelerator(currentSettings[f], platform) === nextNorm
-      );
-      if (hasConflict) {
-        setShortcutError(
-          isOverlayCmd ? t.shortcutOverlayDuplicateErr : t.shortcutDuplicateErr
-        );
-        return;
-      }
-
-      const updated: AppSettings = { ...currentSettings, [recordingField]: nextCombo };
-      shortcutSavedRef.current = false;
-      setSettings(updated);
-      setRecordingField(null);
-      setLiveTokens([]);
-      setShortcutError(null);
-      void invoke("set_shortcuts_paused", { paused: false }).catch(() => {});
+      tryCommitShortcut(resolveRecordedHotkeyToken(e), mods);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
+      // Windows/WebView2 often suppresses keydown for VK_SNAPSHOT and emits keyup only.
+      const token = resolveRecordedHotkeyToken(e);
+      if (token === "PrintScreen" && !committed) {
+        e.preventDefault();
+        e.stopPropagation();
+        tryCommitShortcut(token, getEventModifiers(e, platform));
+        return;
+      }
       setLiveTokens(getEventModifiers(e, platform));
     };
 
@@ -615,7 +639,9 @@ export const SettingsApp: React.FC = () => {
               <span className="recording-placeholder">
                 {isOverlayCmd
                   ? t.shortcutOverlayRecordingPlaceholder
-                  : t.shortcutRecordingPlaceholder}
+                  : platform === "windows"
+                    ? t.shortcutRecordingPlaceholderWindows
+                    : t.shortcutRecordingPlaceholder}
               </span>
             )}
             {isRec && shownTokens.length > 0 && (
@@ -1101,7 +1127,9 @@ export const SettingsApp: React.FC = () => {
                     <RotateCcw size={12} /> {t.shortcutResetDefaultsBtn}
                   </button>
                 </div>
-                <p className="muted-info">{t.shortcutHint}</p>
+                <p className="muted-info">
+                  {platform === "windows" ? t.shortcutHintWindows : t.shortcutHint}
+                </p>
 
                 {(
                   [

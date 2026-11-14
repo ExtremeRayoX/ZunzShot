@@ -91,6 +91,35 @@ export function codeToHotkeyToken(code: string): string | null {
   return SUPPORTED_SPECIAL_CODES.has(code) ? code : null;
 }
 
+export function resolveRecordedHotkeyToken(e: KeyboardEvent): string | null {
+  const byCode = codeToHotkeyToken(e.code);
+  if (byCode) return byCode;
+  if (e.key === "PrintScreen" || e.keyCode === 44) return "PrintScreen";
+  return null;
+}
+
+export function resolveMainKeyToken(e: KeyboardEvent): string | null {
+  return (
+    resolveRecordedHotkeyToken(e) ??
+    (e.key === "Escape"
+      ? "Escape"
+      : e.key.length === 1
+        ? e.key.toUpperCase()
+        : null)
+  );
+}
+
+export function isSingleGlobalShortcutAllowed(
+  mainToken: string | null,
+  platform: string
+): boolean {
+  return (
+    platform === "windows" &&
+    typeof mainToken === "string" &&
+    mainToken.toUpperCase() === "PRINTSCREEN"
+  );
+}
+
 export function isModifierKeyEvent(e: KeyboardEvent): boolean {
   return (
     MODIFIER_CODES.has(e.code) ||
@@ -143,13 +172,7 @@ export function keyboardEventToAccelerator(
   platform: string
 ): string | null {
   if (isModifierKeyEvent(e)) return null;
-  const main =
-    codeToHotkeyToken(e.code) ??
-    (e.key === "Escape"
-      ? "Escape"
-      : e.key.length === 1
-        ? e.key.toUpperCase()
-        : null);
+  const main = resolveMainKeyToken(e);
   if (!main) return null;
   const mods = getEventModifiers(e, platform);
   return [...mods, main].join("+");
@@ -191,6 +214,7 @@ export function formatKeyLabel(token: string, platform: string): string {
   }
   if (upper === "SHIFT") return "⇧ Shift";
   if (upper === "ESCAPE" || upper === "ESC") return "Esc";
+  if (upper === "PRINTSCREEN") return "PrtSc";
   if (upper === "SPACE") return "Space";
   if (upper === "ARROWUP") return "↑";
   if (upper === "ARROWDOWN") return "↓";

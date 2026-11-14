@@ -65,6 +65,8 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 | <img src="docs/icons/mode-window.svg" width="26" height="26" alt="Capturar ventana" /> | **Capturar ventana** | `⌘ + ⇧ + W` | `Ctrl + Shift + W` | Detecta y resalta automáticamente ventanas y aplicaciones abiertas para capturarlas con un clic. |
 | <img src="docs/icons/mode-fullscreen.svg" width="26" height="26" alt="Pantalla completa" /> | **Pantalla completa** | `⌘ + ⇧ + F` | `Ctrl + Shift + F` | Selecciona al instante todo el monitor activo listo para editar, copiar, fijar o guardar. |
 
+> **Atajos personalizables en Ajustes:** Puedes cambiar cualquier combinación desde **Ajustes → Atajos**. En Windows también puedes asignar la tecla **`Impr Pant` (`PrtSc`)** por sí sola o combinada *(por ejemplo `Shift + PrtSc`)*.
+
 ---
 
 ### Barra horizontal de herramientas y edición
@@ -114,8 +116,9 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ## Notas de Versión
 
 ### `v1.0.8`
-- **Captura continua en múltiples pantallas (Windows):** Al iniciar una captura se atenúan todas las pantallas conectadas al mismo tiempo, permitiéndote capturar un solo monitor o arrastrar una selección a través de varios monitores.
-- **Barras y avisos en la pantalla activa (Windows):** La barra de modos y las notificaciones se posicionan automáticamente en el monitor donde está tu cursor sin cortarse entre bordes.
+- **Captura continua en múltiples pantallas (macOS y Windows):** Al iniciar una captura se atenúan todas tus pantallas conectadas al mismo tiempo, permitiéndote seleccionar dentro de cualquiera de ellas o arrastrar una captura entre varios monitores sin importar su resolución o ubicación.
+- **Controles y avisos en la pantalla activa (macOS y Windows):** Las barras de captura, edición y notificaciones se ajustan automáticamente al monitor donde trabajas sin cortarse entre bordes.
+- **Tecla `PrtSc` individual o combinada (Windows):** En **Ajustes → Atajos** ahora puedes asignar `Impr Pant` (`PrtSc`) como atajo global de captura por sí sola o combinada con modificadores *(por ejemplo `Shift + PrtSc`)*.
 - **Ícono oficial en el instalador de Windows:** El instalador y desinstalador de Windows ahora muestran el logotipo de ZunzShot.
 
 ### `v1.0.7`

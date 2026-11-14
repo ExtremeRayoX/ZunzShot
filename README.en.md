@@ -65,6 +65,8 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 | <img src="docs/icons/mode-window.svg" width="26" height="26" alt="Window Capture" /> | **Window Capture** | `⌘ + ⇧ + W` | `Ctrl + Shift + W` | Automatically detects and highlights open application windows to capture with a single click. |
 | <img src="docs/icons/mode-fullscreen.svg" width="26" height="26" alt="Fullscreen" /> | **Fullscreen** | `⌘ + ⇧ + F` | `Ctrl + Shift + F` | Instantly selects the entire active display ready to annotate, copy, pin, or save. |
 
+> **Customizable shortcuts in Settings:** You can customize any combination in **Settings → Shortcuts**. On Windows, you can also assign the **`Print Screen` (`PrtSc`)** key on its own or combined with modifiers *(such as `Shift + PrtSc`)*.
+
 ---
 
 ### Horizontal Editing Toolbar
@@ -114,8 +116,9 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 ## Release Notes
 
 ### `v1.0.8`
-- **Continuous multi-monitor capture (Windows):** Starting a capture now dims all connected displays at once, letting you select within any screen or drag one capture seamlessly across multiple monitors.
-- **Controls on the active monitor (Windows):** The mode bar and in-capture notices automatically center on the display where your cursor is, avoiding splits across screen edges.
+- **Continuous multi-monitor capture (macOS & Windows):** Starting a capture now dims all connected displays at once, letting you capture within any monitor or drag one selection seamlessly across multiple screens regardless of resolution or arrangement.
+- **Controls & notices on the active screen (macOS & Windows):** The capture mode bar, editing tools, and notifications adapt automatically to the screen you are working on without clipping across display edges.
+- **Standalone or modified `PrtSc` shortcuts (Windows):** In **Settings → Shortcuts**, global capture shortcuts now allow assigning the `Print Screen` (`PrtSc`) key on its own or paired with modifiers *(such as `Shift + PrtSc`)*.
 - **Official Windows installer icon:** The Windows installer and uninstaller now display the ZunzShot logo cleanly.
 
 ### `v1.0.7`

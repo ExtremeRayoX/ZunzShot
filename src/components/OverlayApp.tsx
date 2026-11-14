@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
@@ -52,6 +53,7 @@ import {
 } from "../utils/shortcuts";
 import type {
   AppSettings,
+  CapturedScreenInfo,
   CaptureMetadata,
   CaptureMode,
   ClockSticker,
@@ -237,6 +239,112 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+const CURRENT_SCREEN_INDEX = (() => {
+  try {
+    const label = getCurrentWebviewWindow().label;
+    if (label === "overlay") return 0;
+    const match = /^overlay-(\d+)$/.exec(label);
+    return match ? Number(match[1]) : 0;
+  } catch {
+    return 0;
+  }
+})();
+
+const CURRENT_WINDOW_ID = `${CURRENT_SCREEN_INDEX}-${Math.random().toString(36).slice(2, 8)}`;
+
+interface OverlaySyncPayload {
+  sender: string;
+  seq: number;
+  ownerScreenIndex: number;
+  captureMode: CaptureMode;
+  selection: SelectionBox | null;
+  hoveredWin: WindowCandidate | null;
+  activeTool: ToolType;
+  activeColor: string;
+  strokeWidth: number;
+  history: ItemHistoryState;
+  draftItem: OverlayItem | null;
+  selectedStickerId: string | null;
+  nextStepNum: number;
+  editingTextId: string | null;
+}
+
+interface GlobalDragPointPayload {
+  vx: number;
+  vy: number;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function serializeItemForSync(item: OverlayItem): OverlayItem {
+  if (item.type !== "photo") return item;
+  const { img: _domImg, ...rest } = item;
+  return rest;
+}
+
+function serializeHistoryForSync(h: ItemHistoryState): ItemHistoryState {
+  return {
+    past: h.past.map((snap) => snap.map(serializeItemForSync)),
+    present: h.present.map(serializeItemForSync),
+    future: h.future.map((snap) => snap.map(serializeItemForSync)),
+  };
+}
+
+function hydratePhotoItem(
+  item: OverlayItem,
+  cache: Map<string, HTMLImageElement>,
+  onLoaded: () => void
+): OverlayItem {
+  if (item.type !== "photo" || item.img || !item.imgSrc) return item;
+  const existing = cache.get(item.imgSrc);
+  if (existing) {
+    if (!existing.complete) {
+      existing.addEventListener("load", onLoaded, { once: true });
+    }
+    return { ...item, img: existing };
+  }
+  const img = new Image();
+  img.onload = onLoaded;
+  img.src = item.imgSrc;
+  cache.set(item.imgSrc, img);
+  return { ...item, img };
+}
+
+function pickSelectionOwnerScreen(
+  sel: SelectionBox | null,
+  screens: CapturedScreenInfo[] | undefined,
+  fallbackIndex: number
+): number {
+  if (!sel || !screens || screens.length <= 1) return fallbackIndex;
+  let bestIdx = fallbackIndex;
+  let bestArea = -1;
+  const selR = sel.x + sel.w;
+  const selB = sel.y + sel.h;
+  for (const s of screens) {
+    const ox = Math.max(0, Math.min(selR, s.lx + s.lw) - Math.max(sel.x, s.lx));
+    const oy = Math.max(0, Math.min(selB, s.ly + s.lh) - Math.max(sel.y, s.ly));
+    const area = ox * oy;
+    if (area > bestArea) {
+      bestArea = area;
+      bestIdx = s.index;
+    }
+  }
+  if (bestArea > 0) return bestIdx;
+  const cx = sel.x + sel.w / 2;
+  const cy = sel.y + sel.h / 2;
+  const hit = screens.find(
+    (s) => cx >= s.lx && cx <= s.lx + s.lw && cy >= s.ly && cy <= s.ly + s.lh
+  );
+  return hit ? hit.index : fallbackIndex;
+}
+
 export const OverlayApp: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const loupeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -257,17 +365,67 @@ export const OverlayApp: React.FC = () => {
     h: window.innerHeight,
   });
   const itemsCountRef = useRef<number>(0);
+  const photoCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const syncSeqRef = useRef<number>(0);
+  const lastSeqBySenderRef = useRef<Map<string, number>>(new Map());
+  const lastRemoteSyncKeyRef = useRef<string>("");
+  const lastSentSyncKeyRef = useRef<string>("");
+  const syncRafRef = useRef<number | null>(null);
+  const lastModsRef = useRef<{ shift: boolean; alt: boolean }>({
+    shift: false,
+    alt: false,
+  });
   const runtimePlatform = useMemo(() => detectPlatform(), []);
 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [metadata, setMetadata] = useState<CaptureMetadata | null>(null);
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [sessionReady, setSessionReady] = useState<boolean>(false);
+  const [ownerScreenIndex, setOwnerScreenIndex] = useState<number>(0);
+  const ownerScreenRef = useRef<number>(0);
+  ownerScreenRef.current = ownerScreenIndex;
+  const [remoteEditingTextId, setRemoteEditingTextId] = useState<string | null>(null);
+  const [, setPhotoDecodeTick] = useState<number>(0);
   const [viewport, setViewport] = useState<{ w: number; h: number }>({
     w: window.innerWidth,
     h: window.innerHeight,
   });
   viewportRef.current = viewport;
+
+  const isMultiScreen = Boolean(metadata?.screens && metadata.screens.length > 1);
+  const myScreen: CapturedScreenInfo = useMemo(() => {
+    const found = metadata?.screens?.find((s) => s.index === CURRENT_SCREEN_INDEX);
+    if (found) return found;
+    return {
+      index: CURRENT_SCREEN_INDEX,
+      displayId: 0,
+      lx: 0,
+      ly: 0,
+      lw: viewport.w || metadata?.logicalWidth || window.innerWidth,
+      lh: viewport.h || metadata?.logicalHeight || window.innerHeight,
+      pixelW: bitmap?.width ?? 1,
+      pixelH: bitmap?.height ?? 1,
+      scaleFactor: metadata?.scaleFactor ?? 1,
+      isPrimary: CURRENT_SCREEN_INDEX === 0,
+    };
+  }, [metadata, viewport.w, viewport.h, bitmap]);
+  const myScreenRef = useRef<CapturedScreenInfo>(myScreen);
+  myScreenRef.current = myScreen;
+  const virtSize = useMemo(
+    () => ({
+      w:
+        isMultiScreen && metadata
+          ? Math.max(1, metadata.logicalWidth)
+          : Math.max(1, viewport.w),
+      h:
+        isMultiScreen && metadata
+          ? Math.max(1, metadata.logicalHeight)
+          : Math.max(1, viewport.h),
+    }),
+    [isMultiScreen, metadata, viewport.w, viewport.h]
+  );
+  const virtSizeRef = useRef<{ w: number; h: number }>(virtSize);
+  virtSizeRef.current = virtSize;
 
   const [captureMode, setCaptureMode] = useState<CaptureMode>("region");
   const [selection, setSelection] = useState<SelectionBox | null>(null);
@@ -330,6 +488,7 @@ export const OverlayApp: React.FC = () => {
   // Inline text input state (for creating new text or editing an existing one)
   const [textInput, setTextInput] = useState<{
     editingId: string | null;
+    screenIndex: number;
     x: number;
     y: number;
     value: string;
@@ -480,9 +639,18 @@ export const OverlayApp: React.FC = () => {
       shareRestoreCleanupRef.current();
       shareRestoreCleanupRef.current = null;
     }
+    if (syncRafRef.current !== null) {
+      window.cancelAnimationFrame(syncRafRef.current);
+      syncRafRef.current = null;
+    }
     sessionOpenRef.current = false;
     copyInFlightRef.current = false;
+    lastSeqBySenderRef.current.clear();
+    lastRemoteSyncKeyRef.current = "";
+    lastSentSyncKeyRef.current = "";
+    photoCacheRef.current.clear();
     setSessionReady(false);
+    setRemoteEditingTextId(null);
     dragRef.current = { kind: "none" };
     updateSelection(null);
     setHoveredWin(null);
@@ -522,7 +690,9 @@ export const OverlayApp: React.FC = () => {
         return;
       }
 
-      const buf = await invoke<ArrayBuffer>("get_capture_rgba");
+      const buf = await invoke<ArrayBuffer>("get_capture_rgba", {
+        screenIndex: CURRENT_SCREEN_INDEX,
+      });
       if (token !== activeSessionTokenRef.current) return;
 
       const view = new DataView(buf);
@@ -536,12 +706,22 @@ export const OverlayApp: React.FC = () => {
         return;
       }
 
+      const screenInfo = meta.screens?.find((s) => s.index === CURRENT_SCREEN_INDEX);
       const rawVw = window.innerWidth;
       const rawVh = window.innerHeight;
-      const metaVw = Math.round(meta.logicalWidth || rawVw);
-      const metaVh = Math.round(meta.logicalHeight || rawVh);
+      const metaVw = Math.round(screenInfo?.lw || meta.logicalWidth || rawVw);
+      const metaVh = Math.round(screenInfo?.lh || meta.logicalHeight || rawVh);
       const vw = Math.abs(rawVw - metaVw) <= 12 && rawVw > 0 ? rawVw : metaVw;
       const vh = Math.abs(rawVh - metaVh) <= 12 && rawVh > 0 ? rawVh : metaVh;
+      const initialOwner = meta.activeScreenIndex ?? 0;
+
+      lastSeqBySenderRef.current.clear();
+      lastRemoteSyncKeyRef.current = "";
+      lastSentSyncKeyRef.current = "";
+      photoCacheRef.current.clear();
+      setRemoteEditingTextId(null);
+      setOwnerScreenIndex(initialOwner);
+      ownerScreenRef.current = initialOwner;
 
       viewportRef.current = { w: vw, h: vh };
       setViewport({ w: vw, h: vh });
@@ -568,17 +748,23 @@ export const OverlayApp: React.FC = () => {
       setActiveTool("select");
 
       if (meta.mode === "fullscreen") {
-        updateSelection({ x: 0, y: 0, w: vw, h: vh, shape: "rect" });
+        const fullW = meta.screens && meta.screens.length > 1 ? Math.max(1, meta.logicalWidth) : vw;
+        const fullH = meta.screens && meta.screens.length > 1 ? Math.max(1, meta.logicalHeight) : vh;
+        updateSelection({ x: 0, y: 0, w: fullW, h: fullH, shape: "rect" });
       } else {
         updateSelection(null);
       }
 
       setSessionReady(true);
-      void invoke("focus_overlay_window").catch(() => {});
-      window.requestAnimationFrame(() => {
-        focusOverlayCanvas();
-        window.setTimeout(focusOverlayCanvas, 40);
-      });
+      if (CURRENT_SCREEN_INDEX === initialOwner) {
+        void invoke("focus_overlay_window", {
+          screenIndex: CURRENT_SCREEN_INDEX,
+        }).catch(() => {});
+        window.requestAnimationFrame(() => {
+          focusOverlayCanvas();
+          window.setTimeout(focusOverlayCanvas, 40);
+        });
+      }
     } catch (err) {
       console.error("Failed loading capture session:", err);
       if (fromSessionReady && token === activeSessionTokenRef.current) {
@@ -614,8 +800,8 @@ export const OverlayApp: React.FC = () => {
         setHoveredWin(null);
 
         if (nextMode === "fullscreen") {
-          const vp = viewportRef.current;
-          updateSelection({ x: 0, y: 0, w: vp.w, h: vp.h, shape: "rect" });
+          const vs = virtSizeRef.current;
+          updateSelection({ x: 0, y: 0, w: vs.w, h: vs.h, shape: "rect" });
           setActiveTool("select");
         } else if (itemsCountRef.current === 0) {
           updateSelection(null);
@@ -632,6 +818,52 @@ export const OverlayApp: React.FC = () => {
         });
       }
     );
+    const unlistenSync = listen<OverlaySyncPayload>("zunzshot://overlay-sync", (ev) => {
+      const p = ev.payload;
+      if (!p || p.sender === CURRENT_WINDOW_ID) return;
+      const lastSeq = lastSeqBySenderRef.current.get(p.sender) ?? 0;
+      if (p.seq <= lastSeq) return;
+      lastSeqBySenderRef.current.set(p.sender, p.seq);
+
+      const { sender: _s, seq: _q, ...snapshot } = p;
+      lastRemoteSyncKeyRef.current = JSON.stringify(snapshot);
+
+      const hydrateList = (list: OverlayItem[]) =>
+        list.map((it) =>
+          hydratePhotoItem(it, photoCacheRef.current, () =>
+            setPhotoDecodeTick((n) => n + 1)
+          )
+        );
+
+      setOwnerScreenIndex(p.ownerScreenIndex);
+      ownerScreenRef.current = p.ownerScreenIndex;
+      setCaptureMode(p.captureMode);
+      updateSelection(p.selection);
+      setHoveredWin(p.hoveredWin);
+      setActiveTool(p.activeTool);
+      setActiveColor(p.activeColor);
+      setStrokeWidth(p.strokeWidth);
+      setHistory({
+        past: p.history.past.map(hydrateList),
+        present: hydrateList(p.history.present),
+        future: p.history.future.map(hydrateList),
+      });
+      setDraftItem(
+        p.draftItem
+          ? hydratePhotoItem(p.draftItem, photoCacheRef.current, () =>
+              setPhotoDecodeTick((n) => n + 1)
+            )
+          : null
+      );
+      setSelectedStickerId(p.selectedStickerId);
+      setNextStepNum(p.nextStepNum);
+      setRemoteEditingTextId(p.editingTextId);
+      if (p.ownerScreenIndex !== CURRENT_SCREEN_INDEX) {
+        setActivePopover(null);
+        setHoverTip(null);
+      }
+    });
+
     const unlistenSettings = listen<AppSettings>(
       "zunzshot://settings-updated",
       (ev) => {
@@ -651,6 +883,7 @@ export const OverlayApp: React.FC = () => {
       void unlistenReset.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());
       void unlistenSwitchMode.then((fn) => fn());
+      void unlistenSync.then((fn) => fn());
       void unlistenSettings.then((fn) => fn());
       window.removeEventListener("resize", onResize);
     };
@@ -850,21 +1083,30 @@ export const OverlayApp: React.FC = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const scrX = myScreen.lx;
+    const scrY = myScreen.ly;
+    const vW = virtSize.w;
+    const vH = virtSize.h;
+    const activeEditingId = textInput?.editingId ?? remoteEditingTextId;
+
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 1. Base frozen screenshot
+    // 1. Base frozen screenshot for this screen
     ctx.drawImage(bitmap, 0, 0, cssW, cssH);
 
     // 2. Dim overlay with crisp selection / hovered window cutout
     if (selection) {
+      const lx = selection.x - scrX;
+      const ly = selection.y - scrY;
+
       ctx.fillStyle = "rgba(6, 10, 20, 0.52)";
       ctx.beginPath();
       ctx.rect(0, 0, cssW, cssH);
       if (selection.shape === "circle") {
         ctx.ellipse(
-          selection.x + selection.w / 2,
-          selection.y + selection.h / 2,
+          lx + selection.w / 2,
+          ly + selection.h / 2,
           Math.max(1, selection.w / 2),
           Math.max(1, selection.h / 2),
           0,
@@ -873,7 +1115,7 @@ export const OverlayApp: React.FC = () => {
           true
         );
       } else {
-        ctx.rect(selection.x + selection.w, selection.y, -selection.w, selection.h);
+        ctx.rect(lx + selection.w, ly, -selection.w, selection.h);
       }
       ctx.fill("evenodd");
 
@@ -887,13 +1129,13 @@ export const OverlayApp: React.FC = () => {
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = "rgba(255,255,255,0.4)";
         ctx.lineWidth = 1;
-        ctx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+        ctx.strokeRect(lx, ly, selection.w, selection.h);
         ctx.restore();
 
         ctx.beginPath();
         ctx.ellipse(
-          selection.x + selection.w / 2,
-          selection.y + selection.h / 2,
+          lx + selection.w / 2,
+          ly + selection.h / 2,
           Math.max(1, selection.w / 2),
           Math.max(1, selection.h / 2),
           0,
@@ -902,20 +1144,21 @@ export const OverlayApp: React.FC = () => {
         );
         ctx.stroke();
       } else {
-        ctx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+        ctx.strokeRect(lx, ly, selection.w, selection.h);
       }
 
       // 8 resize handles
-      const { x, y, w, h } = selection;
+      const w = selection.w;
+      const h = selection.h;
       const pts: Array<[number, number]> = [
-        [x, y],
-        [x + w / 2, y],
-        [x + w, y],
-        [x + w, y + h / 2],
-        [x + w, y + h],
-        [x + w / 2, y + h],
-        [x, y + h],
-        [x, y + h / 2],
+        [lx, ly],
+        [lx + w / 2, ly],
+        [lx + w, ly],
+        [lx + w, ly + h / 2],
+        [lx + w, ly + h],
+        [lx + w / 2, ly + h],
+        [lx, ly + h],
+        [lx, ly + h / 2],
       ];
       for (const [hx, hy] of pts) {
         ctx.fillStyle = "#ffffff";
@@ -928,10 +1171,10 @@ export const OverlayApp: React.FC = () => {
       }
       ctx.restore();
     } else if (captureMode === "window" && hoveredWin) {
-      const wx = hoveredWin.rx * cssW;
-      const wy = hoveredWin.ry * cssH;
-      const ww = hoveredWin.rw * cssW;
-      const wh = hoveredWin.rh * cssH;
+      const wx = hoveredWin.rx * vW - scrX;
+      const wy = hoveredWin.ry * vH - scrY;
+      const ww = hoveredWin.rw * vW;
+      const wh = hoveredWin.rh * vH;
 
       ctx.fillStyle = "rgba(6, 10, 20, 0.50)";
       ctx.beginPath();
@@ -947,10 +1190,12 @@ export const OverlayApp: React.FC = () => {
       ctx.fillRect(0, 0, cssW, cssH);
     }
 
-    // 3. Draw committed items and active draft item
-    const pixelSource = { bitmap, cssW, cssH };
+    // 3. Draw committed items and active draft item in virtual space translated onto this screen
+    ctx.save();
+    ctx.translate(-scrX, -scrY);
+    const pixelSource = { bitmap, cssW, cssH, offsetX: scrX, offsetY: scrY };
     for (const item of items) {
-      if (textInput?.editingId === item.id) continue;
+      if (activeEditingId === item.id) continue;
       drawOverlayItem(
         ctx,
         item,
@@ -970,6 +1215,7 @@ export const OverlayApp: React.FC = () => {
         pixelSource
       );
     }
+    ctx.restore();
 
     ctx.restore();
   }, [
@@ -977,6 +1223,10 @@ export const OverlayApp: React.FC = () => {
     metadata,
     sessionReady,
     viewport,
+    myScreen.lx,
+    myScreen.ly,
+    virtSize.w,
+    virtSize.h,
     selection,
     captureMode,
     hoveredWin,
@@ -984,6 +1234,7 @@ export const OverlayApp: React.FC = () => {
     draftItem,
     selectedStickerId,
     textInput?.editingId,
+    remoteEditingTextId,
     lang,
   ]);
 
@@ -1010,17 +1261,58 @@ export const OverlayApp: React.FC = () => {
               },
             ]
           : items;
-      return renderExportPngBytes(
-        bitmap,
-        viewport.w,
-        viewport.h,
-        activeSel,
-        exportItems,
-        metadata.capturedAtIso,
-        lang
-      );
+
+      const eps = 0.75;
+      const fitsLocalScreen =
+        !isMultiScreen ||
+        (activeSel.x >= myScreen.lx - eps &&
+          activeSel.y >= myScreen.ly - eps &&
+          activeSel.x + activeSel.w <= myScreen.lx + myScreen.lw + eps &&
+          activeSel.y + activeSel.h <= myScreen.ly + myScreen.lh + eps);
+
+      if (fitsLocalScreen) {
+        return renderExportPngBytes(
+          bitmap,
+          viewport.w,
+          viewport.h,
+          activeSel,
+          exportItems,
+          metadata.capturedAtIso,
+          lang,
+          myScreen.lx,
+          myScreen.ly
+        );
+      }
+
+      const buf = await invoke<ArrayBuffer>("get_capture_region_rgba", {
+        x: activeSel.x,
+        y: activeSel.y,
+        w: activeSel.w,
+        h: activeSel.h,
+      });
+      const view = new DataView(buf);
+      const regW = view.getUint32(0, true);
+      const regH = view.getUint32(4, true);
+      const pixels = new Uint8ClampedArray(buf, 8);
+      const regImgData = new ImageData(pixels, regW, regH);
+      const regBitmap = await createImageBitmap(regImgData);
+      try {
+        return await renderExportPngBytes(
+          regBitmap,
+          activeSel.w,
+          activeSel.h,
+          activeSel,
+          exportItems,
+          metadata.capturedAtIso,
+          lang,
+          activeSel.x,
+          activeSel.y
+        );
+      } finally {
+        regBitmap.close();
+      }
     },
-    [bitmap, metadata, selection, viewport, items, textInput, lang]
+    [bitmap, metadata, selection, viewport, items, textInput, lang, isMultiScreen, myScreen]
   );
 
   const handleCopy = useCallback(
@@ -1047,6 +1339,9 @@ export const OverlayApp: React.FC = () => {
           title: t.overlay.copiedMsg,
           subtitle,
           closeOverlay: true,
+          screenIndex: isMultiScreen
+            ? pickSelectionOwnerScreen(activeSel, metadata?.screens, CURRENT_SCREEN_INDEX)
+            : undefined,
         }).catch(() => invoke("close_overlay").catch(() => {}));
       } catch (err) {
         console.error("Failed copying screenshot:", err);
@@ -1137,6 +1432,9 @@ export const OverlayApp: React.FC = () => {
         title: t.overlay.savedMsg,
         subtitle: savedName,
         closeOverlay: true,
+        screenIndex: isMultiScreen
+          ? pickSelectionOwnerScreen(selectionRef.current ?? selection, metadata?.screens, CURRENT_SCREEN_INDEX)
+          : undefined,
       }).catch(() => invoke("close_overlay").catch(() => {}));
       return;
     }
@@ -1173,9 +1471,14 @@ export const OverlayApp: React.FC = () => {
                   "x-anchor-y": String(Math.round(anchorRect.top)),
                   "x-anchor-w": String(Math.round(anchorRect.width)),
                   "x-anchor-h": String(Math.round(anchorRect.height)),
+                  "x-screen-index": String(CURRENT_SCREEN_INDEX),
                 },
               }
-            : undefined
+            : {
+                headers: {
+                  "x-screen-index": String(CURRENT_SCREEN_INDEX),
+                },
+              }
         );
         if (runtimePlatform === "macos") {
           shareRestoreCleanupRef.current?.();
@@ -1319,13 +1622,16 @@ export const OverlayApp: React.FC = () => {
         return;
       }
 
-      const url = URL.createObjectURL(blob);
+      const [url, dataUrl] = await Promise.all([
+        Promise.resolve(URL.createObjectURL(blob)),
+        isMultiScreen ? blobToDataUrl(blob).catch(() => "") : Promise.resolve(""),
+      ]);
       const img = new Image();
       img.onload = () => {
         URL.revokeObjectURL(url);
         const targetBox = selection ?? {
-          x: viewport.w * 0.25,
-          y: viewport.h * 0.25,
+          x: myScreen.lx + viewport.w * 0.25,
+          y: myScreen.ly + viewport.h * 0.25,
           w: viewport.w * 0.5,
           h: viewport.h * 0.5,
           shape: "rect",
@@ -1343,6 +1649,7 @@ export const OverlayApp: React.FC = () => {
           h,
           shape: "rounded",
           img,
+          imgSrc: dataUrl || undefined,
         };
         commitItems((prev) => [...prev, sticker]);
         setSelectedStickerId(sticker.id);
@@ -1355,7 +1662,16 @@ export const OverlayApp: React.FC = () => {
       };
       img.src = url;
     },
-    [selection, viewport, commitItems, showToastMsg, t.overlay.staticImageOnlyError]
+    [
+      selection,
+      viewport,
+      myScreen.lx,
+      myScreen.ly,
+      isMultiScreen,
+      commitItems,
+      showToastMsg,
+      t.overlay.staticImageOnlyError,
+    ]
   );
 
   const handleAddOrSelectClock = useCallback(() => {
@@ -1368,8 +1684,8 @@ export const OverlayApp: React.FC = () => {
     }
 
     const box = selection ?? {
-      x: 40,
-      y: 40,
+      x: myScreen.lx + 40,
+      y: myScreen.ly + 40,
       w: viewport.w - 80,
       h: viewport.h - 80,
       shape: "rect",
@@ -1516,8 +1832,8 @@ export const OverlayApp: React.FC = () => {
             prev
               ? clampSelection(
                   { ...prev, x: prev.x + dx, y: prev.y + dy },
-                  viewport.w,
-                  viewport.h
+                  virtSize.w,
+                  virtSize.h
                 )
               : null
           );
@@ -1617,6 +1933,369 @@ export const OverlayApp: React.FC = () => {
     }
   };
 
+  const setDragMonitorActive = useCallback(
+    (active: boolean) => {
+      if (isMultiScreen && runtimePlatform === "macos") {
+        void invoke("set_macos_drag_monitor", { active }).catch(() => {});
+      }
+    },
+    [isMultiScreen, runtimePlatform]
+  );
+
+  const applyDragMoveAtVirtual = useCallback(
+    (vx: number, vy: number, shiftKey: boolean, altKey: boolean) => {
+      const drag = dragRef.current;
+      if (drag.kind === "none") return;
+
+      if (drag.kind === "creating-selection") {
+        let w = Math.abs(vx - drag.startX);
+        let h = Math.abs(vy - drag.startY);
+        if (shiftKey || drag.shape === "circle") {
+          // Keep circular captures 1:1 easily unless Alt is held for free ellipse
+          if (!altKey) {
+            const side = Math.max(w, h);
+            w = side;
+            h = side;
+          }
+        }
+        const x = vx >= drag.startX ? drag.startX : drag.startX - w;
+        const y = vy >= drag.startY ? drag.startY : drag.startY - h;
+        updateSelection(
+          clampSelection({ x, y, w, h, shape: drag.shape }, virtSizeRef.current.w, virtSizeRef.current.h)
+        );
+        return;
+      }
+
+      if (drag.kind === "adjusting-selection") {
+        const dx = vx - drag.startX;
+        const dy = vy - drag.startY;
+        const o = drag.orig;
+        let next: SelectionBox = { ...o };
+
+        if (drag.handle === "move") {
+          next.x = o.x + dx;
+          next.y = o.y + dy;
+        } else {
+          if (drag.handle.includes("w")) {
+            const nx = Math.min(o.x + dx, o.x + o.w - 16);
+            next.w = o.w + (o.x - nx);
+            next.x = nx;
+          }
+          if (drag.handle.includes("e")) {
+            next.w = Math.max(16, o.w + dx);
+          }
+          if (drag.handle.includes("n")) {
+            const ny = Math.min(o.y + dy, o.y + o.h - 16);
+            next.h = o.h + (o.y - ny);
+            next.y = ny;
+          }
+          if (drag.handle.includes("s")) {
+            next.h = Math.max(16, o.h + dy);
+          }
+        }
+
+        updateSelection(clampSelection(next, virtSizeRef.current.w, virtSizeRef.current.h));
+        return;
+      }
+
+      if (drag.kind === "dragging-sticker") {
+        const dx = vx - drag.startX;
+        const dy = vy - drag.startY;
+        if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
+          drag.changed = true;
+        }
+        updateItemsTransient((prev) =>
+          prev.map((it) => {
+            if (it.id !== drag.id) return it;
+            if (it.type === "photo") {
+              if (drag.resize) {
+                const aspect = drag.origW / Math.max(1, drag.origH);
+                const nw = Math.max(36, drag.origW + dx);
+                const nh = shiftKey ? Math.max(36, drag.origH + dy) : nw / aspect;
+                return { ...it, w: nw, h: nh };
+              }
+              return { ...it, x: drag.origX + dx, y: drag.origY + dy };
+            }
+            if (it.type === "clock" || it.type === "step" || it.type === "text") {
+              return { ...it, x: drag.origX + dx, y: drag.origY + dy };
+            }
+            return it;
+          })
+        );
+        return;
+      }
+
+      if (drag.kind === "drawing-item") {
+        if (drag.tool === "arrow") {
+          setDraftItem({
+            id: "draft",
+            type: "arrow",
+            x1: drag.startX,
+            y1: drag.startY,
+            x2: vx,
+            y2: vy,
+            color: activeColor,
+            strokeWidth,
+          });
+        } else if (drag.tool === "underline") {
+          // Snap nearly horizontal underlines cleanly like text underlining
+          const snapY = Math.abs(vy - drag.startY) < 18 && !altKey ? drag.startY : vy;
+          setDraftItem({
+            id: "draft",
+            type: "underline",
+            x1: drag.startX,
+            y1: drag.startY,
+            x2: vx,
+            y2: snapY,
+            color: activeColor,
+            strokeWidth: Math.max(3, strokeWidth),
+          });
+        } else if (drag.tool === "rect" || drag.tool === "circle") {
+          const x = Math.min(drag.startX, vx);
+          const y = Math.min(drag.startY, vy);
+          const w = Math.abs(vx - drag.startX);
+          const h = Math.abs(vy - drag.startY);
+          setDraftItem({
+            id: "draft",
+            type: drag.tool,
+            x,
+            y,
+            w,
+            h,
+            color: activeColor,
+            strokeWidth,
+          });
+        } else if (drag.tool === "pixelate") {
+          const x = Math.min(drag.startX, vx);
+          const y = Math.min(drag.startY, vy);
+          const w = Math.abs(vx - drag.startX);
+          const h = Math.abs(vy - drag.startY);
+          setDraftItem({
+            id: "draft",
+            type: "pixelate",
+            x,
+            y,
+            w,
+            h,
+            blockSize: strokeWidth === 2 ? 8 : strokeWidth === 4 ? 14 : 22,
+          });
+        } else if (drag.tool === "step") {
+          setDraftItem((prev) =>
+            prev && prev.type === "step" ? { ...prev, x: vx, y: vy } : prev
+          );
+        } else if (drag.tool === "highlight" || drag.tool === "pen") {
+          setDraftItem((prev) => {
+            if (!prev || prev.type !== drag.tool) return prev;
+            if (prev.type !== "highlight" && prev.type !== "pen") return prev;
+            const last = prev.points[prev.points.length - 1];
+            if (last && Math.hypot(vx - last.x, vy - last.y) < 1.5) return prev;
+            return { ...prev, points: [...prev.points, { x: vx, y: vy }] };
+          });
+        }
+      }
+    },
+    [activeColor, strokeWidth, updateItemsTransient, updateSelection]
+  );
+
+  const finishActiveDrag = useCallback(() => {
+    const drag = dragRef.current;
+    if (drag.kind === "none") return;
+    dragRef.current = { kind: "none" };
+    setDragMonitorActive(false);
+
+    if (
+      (drag.kind === "creating-selection" || drag.kind === "adjusting-selection") &&
+      activeTool !== "eyedropper"
+    ) {
+      setLoupeInfo(null);
+    }
+
+    if (drag.kind === "creating-selection" || drag.kind === "adjusting-selection") {
+      const currentSel = selectionRef.current;
+      if (drag.kind === "creating-selection" && (!currentSel || currentSel.w < 12 || currentSel.h < 12)) {
+        updateSelection(null);
+        return;
+      }
+      if (drag.kind === "creating-selection" && captureMode === "quickCopy" && currentSel) {
+        void handleCopy(currentSel);
+        return;
+      }
+      if (isMultiScreen && currentSel) {
+        const nextOwner = pickSelectionOwnerScreen(
+          currentSel,
+          metadata?.screens,
+          CURRENT_SCREEN_INDEX
+        );
+        setOwnerScreenIndex(nextOwner);
+        ownerScreenRef.current = nextOwner;
+        if (nextOwner !== CURRENT_SCREEN_INDEX) {
+          void invoke("focus_overlay_window", { screenIndex: nextOwner }).catch(() => {});
+        }
+      }
+      return;
+    }
+
+    if (drag.kind === "dragging-sticker" && drag.changed) {
+      const priorSnapshot = drag.origItems;
+      setHistory((h) => ({
+        past: [...h.past.slice(-49), priorSnapshot],
+        present: h.present,
+        future: [],
+      }));
+      return;
+    }
+
+    if (drag.kind === "drawing-item" && draftItem) {
+      if (draftItem.type === "pixelate" && (draftItem.w < 6 || draftItem.h < 6)) {
+        setDraftItem(null);
+        return;
+      }
+      const itemToAdd = { ...draftItem, id: uid(draftItem.type) };
+      commitItems((prev) => [...prev, itemToAdd]);
+      setDraftItem(null);
+      if (itemToAdd.type === "step") {
+        setNextStepNum((n) => n + 1);
+      }
+    }
+  }, [
+    activeTool,
+    captureMode,
+    commitItems,
+    draftItem,
+    handleCopy,
+    isMultiScreen,
+    metadata?.screens,
+    setDragMonitorActive,
+    updateSelection,
+  ]);
+
+  // Listen to native macOS cross-screen drag updates & mirror state across overlay windows
+  const dragMoveHandlerRef = useRef(applyDragMoveAtVirtual);
+  dragMoveHandlerRef.current = applyDragMoveAtVirtual;
+  const finishDragHandlerRef = useRef(finishActiveDrag);
+  finishDragHandlerRef.current = finishActiveDrag;
+  const activeToolRef = useRef(activeTool);
+  activeToolRef.current = activeTool;
+  const samplePixelHexRef = useRef(samplePixelHex);
+  samplePixelHexRef.current = samplePixelHex;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const textInputRef = useRef(textInput);
+  textInputRef.current = textInput;
+
+  useEffect(() => {
+    if (!isMultiScreen || runtimePlatform !== "macos") return;
+    const unlistenMove = listen<GlobalDragPointPayload>(
+      "zunzshot://global-drag-move",
+      (ev) => {
+        const { vx, vy } = ev.payload;
+        if (dragRef.current.kind !== "none") {
+          dragMoveHandlerRef.current(
+            vx,
+            vy,
+            lastModsRef.current.shift,
+            lastModsRef.current.alt
+          );
+        }
+        const scr = myScreenRef.current;
+        const lx = vx - scr.lx;
+        const ly = vy - scr.ly;
+        const insideThisScreen =
+          lx >= 0 && lx <= scr.lw && ly >= 0 && ly <= scr.lh;
+        const magnifierEnabled = settingsRef.current?.showMagnifier ?? true;
+        const wantLoupe =
+          !textInputRef.current &&
+          insideThisScreen &&
+          ((magnifierEnabled &&
+            (!selectionRef.current ||
+              dragRef.current.kind === "creating-selection" ||
+              dragRef.current.kind === "adjusting-selection")) ||
+            activeToolRef.current === "eyedropper");
+        if (wantLoupe) {
+          const hex = samplePixelHexRef.current(lx, ly);
+          if (hex) {
+            setLoupeInfo({ hex, x: lx, y: ly });
+          }
+        } else if (dragRef.current.kind !== "none" || !insideThisScreen) {
+          setLoupeInfo(null);
+        }
+      }
+    );
+    const unlistenUp = listen<GlobalDragPointPayload>(
+      "zunzshot://global-drag-up",
+      () => {
+        if (dragRef.current.kind !== "none") {
+          finishDragHandlerRef.current();
+        } else {
+          setLoupeInfo(null);
+        }
+      }
+    );
+    return () => {
+      void unlistenMove.then((fn) => fn());
+      void unlistenUp.then((fn) => fn());
+    };
+  }, [isMultiScreen, runtimePlatform]);
+
+  // Synchronize annotation & selection state across per-screen overlays with zero echo loops
+  useEffect(() => {
+    if (!sessionOpenRef.current || !isMultiScreen) return;
+    const snapshot = {
+      ownerScreenIndex,
+      captureMode,
+      selection,
+      hoveredWin,
+      activeTool,
+      activeColor,
+      strokeWidth,
+      history: serializeHistoryForSync(history),
+      draftItem: draftItem ? serializeItemForSync(draftItem) : null,
+      selectedStickerId,
+      nextStepNum,
+      editingTextId: textInput?.editingId ?? null,
+    };
+    const key = JSON.stringify(snapshot);
+    if (key === lastRemoteSyncKeyRef.current || key === lastSentSyncKeyRef.current) {
+      return;
+    }
+
+    const emitNow = () => {
+      lastSentSyncKeyRef.current = key;
+      const payload: OverlaySyncPayload = {
+        sender: CURRENT_WINDOW_ID,
+        seq: ++syncSeqRef.current,
+        ...snapshot,
+      };
+      void emit("zunzshot://overlay-sync", payload).catch(() => {});
+    };
+
+    if (dragRef.current.kind !== "none") {
+      if (syncRafRef.current !== null) {
+        window.cancelAnimationFrame(syncRafRef.current);
+      }
+      syncRafRef.current = window.requestAnimationFrame(() => {
+        syncRafRef.current = null;
+        emitNow();
+      });
+    } else {
+      emitNow();
+    }
+  }, [
+    isMultiScreen,
+    ownerScreenIndex,
+    captureMode,
+    selection,
+    hoveredWin,
+    activeTool,
+    activeColor,
+    strokeWidth,
+    history,
+    draftItem,
+    selectedStickerId,
+    nextStepNum,
+    textInput?.editingId,
+  ]);
+
   // Pointer handlers on canvas
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0 || !metadata) return;
@@ -1626,22 +2305,31 @@ export const OverlayApp: React.FC = () => {
       commitText();
       return;
     }
+    if (isMultiScreen && ownerScreenRef.current !== CURRENT_SCREEN_INDEX) {
+      setOwnerScreenIndex(CURRENT_SCREEN_INDEX);
+      ownerScreenRef.current = CURRENT_SCREEN_INDEX;
+      void invoke("focus_overlay_window", {
+        screenIndex: CURRENT_SCREEN_INDEX,
+      }).catch(() => {});
+    }
     if (!selection || activeTool !== "text") {
       focusOverlayCanvas();
     }
 
     const px = e.clientX;
     const py = e.clientY;
+    const vx = px + myScreen.lx;
+    const vy = py + myScreen.ly;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
 
     // 1. Window mode: click locks hovered window
     if (!selection && captureMode === "window" && hoveredWin) {
       updateSelection({
-        x: hoveredWin.rx * viewport.w,
-        y: hoveredWin.ry * viewport.h,
-        w: hoveredWin.rw * viewport.w,
-        h: hoveredWin.rh * viewport.h,
+        x: hoveredWin.rx * virtSize.w,
+        y: hoveredWin.ry * virtSize.h,
+        w: hoveredWin.rw * virtSize.w,
+        h: hoveredWin.rh * virtSize.h,
         shape: "rect",
       });
       setHoveredWin(null);
@@ -1654,12 +2342,13 @@ export const OverlayApp: React.FC = () => {
       const shape = captureMode === "circle" ? "circle" : "rect";
       dragRef.current = {
         kind: "creating-selection",
-        startX: px,
-        startY: py,
+        startX: vx,
+        startY: vy,
         shape,
       };
-      updateSelection({ x: px, y: py, w: 1, h: 1, shape });
+      updateSelection({ x: vx, y: vy, w: 1, h: 1, shape });
       e.currentTarget.setPointerCapture(e.pointerId);
+      setDragMonitorActive(true);
       return;
     }
 
@@ -1667,8 +2356,8 @@ export const OverlayApp: React.FC = () => {
     if ((activeTool === "select" || activeTool === "text") && ctx) {
       const hit = hitTestSticker(
         ctx,
-        px,
-        py,
+        vx,
+        vy,
         items,
         metadata.capturedAtIso,
         lang
@@ -1685,8 +2374,8 @@ export const OverlayApp: React.FC = () => {
           kind: "dragging-sticker",
           id: hit.item.id,
           resize: hit.resizeCorner,
-          startX: px,
-          startY: py,
+          startX: vx,
+          startY: vy,
           origX:
             hit.item.type === "clock" ||
             hit.item.type === "photo" ||
@@ -1707,6 +2396,7 @@ export const OverlayApp: React.FC = () => {
           changed: false,
         };
         e.currentTarget.setPointerCapture(e.pointerId);
+        setDragMonitorActive(true);
         return;
       }
       if (activeTool === "select") {
@@ -1715,16 +2405,17 @@ export const OverlayApp: React.FC = () => {
     }
 
     // 4. Check resize handles (always available) or interior move (when activeTool === "select")
-    const handle = hitTestSelectionHandle(px, py, selection);
+    const handle = hitTestSelectionHandle(vx, vy, selection);
     if (handle && (handle !== "move" || activeTool === "select")) {
       dragRef.current = {
         kind: "adjusting-selection",
         handle,
-        startX: px,
-        startY: py,
+        startX: vx,
+        startY: vy,
         orig: { ...selection },
       };
       e.currentTarget.setPointerCapture(e.pointerId);
+      setDragMonitorActive(true);
       return;
     }
 
@@ -1736,8 +2427,9 @@ export const OverlayApp: React.FC = () => {
       setActivePopover(null);
       setTextInput({
         editingId: null,
-        x: px,
-        y: py,
+        screenIndex: CURRENT_SCREEN_INDEX,
+        x: vx,
+        y: vy,
         value: "",
         color: activeColor,
         fontSize: settings?.textDefaultSize ?? 22,
@@ -1766,15 +2458,16 @@ export const OverlayApp: React.FC = () => {
       dragRef.current = {
         kind: "drawing-item",
         tool: activeTool,
-        startX: px,
-        startY: py,
+        startX: vx,
+        startY: vy,
       };
       e.currentTarget.setPointerCapture(e.pointerId);
+      setDragMonitorActive(true);
       if (activeTool === "highlight" || activeTool === "pen") {
         setDraftItem({
           id: uid(activeTool === "pen" ? "pen" : "hl"),
           type: activeTool,
-          points: [{ x: px, y: py }],
+          points: [{ x: vx, y: vy }],
           color: activeColor,
           strokeWidth,
         });
@@ -1782,8 +2475,8 @@ export const OverlayApp: React.FC = () => {
         setDraftItem({
           id: uid("step"),
           type: "step",
-          x: px,
-          y: py,
+          x: vx,
+          y: vy,
           number: nextStepNum,
           color: activeColor,
           radius: strokeWidth === 2 ? 13 : strokeWidth === 4 ? 16 : 20,
@@ -1795,7 +2488,20 @@ export const OverlayApp: React.FC = () => {
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const px = e.clientX;
     const py = e.clientY;
+    const vx = px + myScreen.lx;
+    const vy = py + myScreen.ly;
+    lastModsRef.current = { shift: e.shiftKey, alt: e.altKey };
     const drag = dragRef.current;
+
+    if (
+      isMultiScreen &&
+      !selection &&
+      drag.kind === "none" &&
+      ownerScreenRef.current !== CURRENT_SCREEN_INDEX
+    ) {
+      setOwnerScreenIndex(CURRENT_SCREEN_INDEX);
+      ownerScreenRef.current = CURRENT_SCREEN_INDEX;
+    }
 
     const isSelectingDrag =
       drag.kind === "creating-selection" || drag.kind === "adjusting-selection";
@@ -1817,8 +2523,8 @@ export const OverlayApp: React.FC = () => {
 
     // Window hover detection before selection is locked
     if (!selection && captureMode === "window" && metadata) {
-      const rx = px / Math.max(1, viewport.w);
-      const ry = py / Math.max(1, viewport.h);
+      const rx = vx / Math.max(1, virtSize.w);
+      const ry = vy / Math.max(1, virtSize.h);
       const found =
         metadata.windows.find(
           (w) => rx >= w.rx && rx <= w.rx + w.rw && ry >= w.ry && ry <= w.ry + w.rh
@@ -1828,214 +2534,41 @@ export const OverlayApp: React.FC = () => {
     }
 
     if (drag.kind === "none") return;
-
-    if (drag.kind === "creating-selection") {
-      let w = Math.abs(px - drag.startX);
-      let h = Math.abs(py - drag.startY);
-      if (e.shiftKey || drag.shape === "circle") {
-        // Keep circular captures 1:1 easily unless Alt is held for free ellipse
-        if (!e.altKey) {
-          const side = Math.max(w, h);
-          w = side;
-          h = side;
-        }
-      }
-      const x = px >= drag.startX ? drag.startX : drag.startX - w;
-      const y = py >= drag.startY ? drag.startY : drag.startY - h;
-      updateSelection(clampSelection({ x, y, w, h, shape: drag.shape }, viewport.w, viewport.h));
-      return;
-    }
-
-    if (drag.kind === "adjusting-selection") {
-      const dx = px - drag.startX;
-      const dy = py - drag.startY;
-      const o = drag.orig;
-      let next: SelectionBox = { ...o };
-
-      if (drag.handle === "move") {
-        next.x = o.x + dx;
-        next.y = o.y + dy;
-      } else {
-        if (drag.handle.includes("w")) {
-          const nx = Math.min(o.x + dx, o.x + o.w - 16);
-          next.w = o.w + (o.x - nx);
-          next.x = nx;
-        }
-        if (drag.handle.includes("e")) {
-          next.w = Math.max(16, o.w + dx);
-        }
-        if (drag.handle.includes("n")) {
-          const ny = Math.min(o.y + dy, o.y + o.h - 16);
-          next.h = o.h + (o.y - ny);
-          next.y = ny;
-        }
-        if (drag.handle.includes("s")) {
-          next.h = Math.max(16, o.h + dy);
-        }
-      }
-
-      updateSelection(clampSelection(next, viewport.w, viewport.h));
-      return;
-    }
-
-    if (drag.kind === "dragging-sticker") {
-      const dx = px - drag.startX;
-      const dy = py - drag.startY;
-      if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) {
-        drag.changed = true;
-      }
-      updateItemsTransient((prev) =>
-        prev.map((it) => {
-          if (it.id !== drag.id) return it;
-          if (it.type === "photo") {
-            if (drag.resize) {
-              const aspect = drag.origW / Math.max(1, drag.origH);
-              const nw = Math.max(36, drag.origW + dx);
-              const nh = e.shiftKey ? Math.max(36, drag.origH + dy) : nw / aspect;
-              return { ...it, w: nw, h: nh };
-            }
-            return { ...it, x: drag.origX + dx, y: drag.origY + dy };
-          }
-          if (it.type === "clock" || it.type === "step" || it.type === "text") {
-            return { ...it, x: drag.origX + dx, y: drag.origY + dy };
-          }
-          return it;
-        })
-      );
-      return;
-    }
-
-    if (drag.kind === "drawing-item") {
-      if (drag.tool === "arrow") {
-        setDraftItem({
-          id: "draft",
-          type: "arrow",
-          x1: drag.startX,
-          y1: drag.startY,
-          x2: px,
-          y2: py,
-          color: activeColor,
-          strokeWidth,
-        });
-      } else if (drag.tool === "underline") {
-        // Snap nearly horizontal underlines cleanly like text underlining
-        const snapY = Math.abs(py - drag.startY) < 18 && !e.altKey ? drag.startY : py;
-        setDraftItem({
-          id: "draft",
-          type: "underline",
-          x1: drag.startX,
-          y1: drag.startY,
-          x2: px,
-          y2: snapY,
-          color: activeColor,
-          strokeWidth: Math.max(3, strokeWidth),
-        });
-      } else if (drag.tool === "rect" || drag.tool === "circle") {
-        const x = Math.min(drag.startX, px);
-        const y = Math.min(drag.startY, py);
-        const w = Math.abs(px - drag.startX);
-        const h = Math.abs(py - drag.startY);
-        setDraftItem({
-          id: "draft",
-          type: drag.tool,
-          x,
-          y,
-          w,
-          h,
-          color: activeColor,
-          strokeWidth,
-        });
-      } else if (drag.tool === "pixelate") {
-        const x = Math.min(drag.startX, px);
-        const y = Math.min(drag.startY, py);
-        const w = Math.abs(px - drag.startX);
-        const h = Math.abs(py - drag.startY);
-        setDraftItem({
-          id: "draft",
-          type: "pixelate",
-          x,
-          y,
-          w,
-          h,
-          blockSize: strokeWidth === 2 ? 8 : strokeWidth === 4 ? 14 : 22,
-        });
-      } else if (drag.tool === "step") {
-        setDraftItem((prev) =>
-          prev && prev.type === "step" ? { ...prev, x: px, y: py } : prev
-        );
-      } else if (drag.tool === "highlight" || drag.tool === "pen") {
-        setDraftItem((prev) => {
-          if (!prev || prev.type !== drag.tool) return prev;
-          if (prev.type !== "highlight" && prev.type !== "pen") return prev;
-          const last = prev.points[prev.points.length - 1];
-          if (last && Math.hypot(px - last.x, py - last.y) < 1.5) return prev;
-          return { ...prev, points: [...prev.points, { x: px, y: py }] };
-        });
-      }
-    }
+    applyDragMoveAtVirtual(vx, vy, e.shiftKey, e.altKey);
   };
 
   const handlePointerUp = () => {
-    const drag = dragRef.current;
-    dragRef.current = { kind: "none" };
-
-    if (
-      (drag.kind === "creating-selection" || drag.kind === "adjusting-selection") &&
-      activeTool !== "eyedropper"
-    ) {
-      setLoupeInfo(null);
-    }
-
-    if (drag.kind === "creating-selection") {
-      const currentSel = selectionRef.current ?? selection;
-      if (!currentSel || currentSel.w < 12 || currentSel.h < 12) {
-        updateSelection(null);
-        return;
-      }
-      if (captureMode === "quickCopy") {
-        void handleCopy(currentSel);
-      }
-      return;
-    }
-
-    if (drag.kind === "dragging-sticker" && drag.changed) {
-      const priorSnapshot = drag.origItems;
-      setHistory((h) => ({
-        past: [...h.past.slice(-49), priorSnapshot],
-        present: h.present,
-        future: [],
-      }));
-      return;
-    }
-
-    if (drag.kind === "drawing-item" && draftItem) {
-      if (draftItem.type === "pixelate" && (draftItem.w < 6 || draftItem.h < 6)) {
-        setDraftItem(null);
-        return;
-      }
-      const itemToAdd = { ...draftItem, id: uid(draftItem.type) };
-      commitItems((prev) => [...prev, itemToAdd]);
-      setDraftItem(null);
-      if (itemToAdd.type === "step") {
-        setNextStepNum((n) => n + 1);
-      }
-    }
+    finishActiveDrag();
   };
+
+  const selectionOwnerScreenIndex = useMemo(
+    () => pickSelectionOwnerScreen(selection, metadata?.screens, ownerScreenIndex),
+    [selection, metadata?.screens, ownerScreenIndex]
+  );
 
   // Compute L-shaped docks: horizontal tools bar (below -> above -> inside bottom)
   // + vertical action bar (right -> left -> inside right) with collision-free auto-flip.
   const toolbarLayout = useMemo(() => {
     if (!selection) return null;
+    if (isMultiScreen && CURRENT_SCREEN_INDEX !== selectionOwnerScreenIndex) {
+      return null;
+    }
     const MARGIN = 8;
     const GAP = 8;
     const hW = Math.min(dockSize.w, Math.max(200, viewport.w - MARGIN * 2));
     const hH = dockSize.h;
     const vW = actionsDockSize.w;
     const vH = actionsDockSize.h;
-    const selLeft = selection.x;
-    const selTop = selection.y;
-    const selRight = selection.x + selection.w;
-    const selBottom = selection.y + selection.h;
+    const selLeft = Math.max(0, Math.min(viewport.w, selection.x - myScreen.lx));
+    const selTop = Math.max(0, Math.min(viewport.h, selection.y - myScreen.ly));
+    const selRight = Math.max(
+      selLeft,
+      Math.min(viewport.w, selection.x + selection.w - myScreen.lx)
+    );
+    const selBottom = Math.max(
+      selTop,
+      Math.min(viewport.h, selection.y + selection.h - myScreen.ly)
+    );
 
     // 1. Horizontal tools bar (Y: outside below -> outside above -> inside bottom)
     let hTop: number;
@@ -2113,7 +2646,16 @@ export const OverlayApp: React.FC = () => {
     const popAlignRight = hLeft + hW >= Math.min(390, viewport.w - MARGIN);
 
     return { hLeft, hTop, vLeft, vTop, popUpwards, popAlignRight };
-  }, [selection, viewport, dockSize, actionsDockSize]);
+  }, [
+    selection,
+    isMultiScreen,
+    selectionOwnerScreenIndex,
+    viewport,
+    myScreen.lx,
+    myScreen.ly,
+    dockSize,
+    actionsDockSize,
+  ]);
 
   const tipProps = useCallback(
     (key: OverlayTooltipKey, dock: "horizontal" | "vertical") => ({
@@ -2294,6 +2836,7 @@ export const OverlayApp: React.FC = () => {
     setActiveColor(item.color);
     setTextInput({
       editingId: item.id,
+      screenIndex: CURRENT_SCREEN_INDEX,
       x: item.x,
       y: item.y,
       value: item.text,
@@ -2365,12 +2908,33 @@ export const OverlayApp: React.FC = () => {
   }, [metadata, selectedSticker, settings, lang]);
 
   const activeMonitorStyle = useMemo(() => {
+    if (isMultiScreen) {
+      return {
+        centerX: viewport.w / 2,
+        monTop: 0,
+        monBottom: viewport.h,
+      };
+    }
     const m = metadata?.activeMonitor ?? { rx: 0, ry: 0, rw: 1, rh: 1 };
     const centerX = (m.rx + m.rw / 2) * viewport.w;
     const monTop = m.ry * viewport.h;
     const monBottom = (m.ry + m.rh) * viewport.h;
     return { centerX, monTop, monBottom };
-  }, [metadata?.activeMonitor, viewport.w, viewport.h]);
+  }, [isMultiScreen, metadata?.activeMonitor, viewport.w, viewport.h]);
+
+  const showTopBarHere = !isMultiScreen || CURRENT_SCREEN_INDEX === ownerScreenIndex;
+  const showSelectionChromeHere =
+    Boolean(selection) &&
+    (!isMultiScreen || CURRENT_SCREEN_INDEX === selectionOwnerScreenIndex);
+  const localDimBadgePos = useMemo(() => {
+    if (!selection) return { left: 10, top: 10 };
+    const sx = Math.max(0, Math.min(viewport.w - 140, selection.x - myScreen.lx));
+    const sy = Math.max(0, Math.min(viewport.h, selection.y - myScreen.ly));
+    return {
+      left: Math.max(10, sx + (sy < 36 ? 10 : 0)),
+      top: sy >= 36 ? sy - 28 : Math.min(viewport.h - 32, sy + 10),
+    };
+  }, [selection, myScreen.lx, myScreen.ly, viewport.w, viewport.h]);
 
   // Measure clock sticker warning silence
   void measureClockSticker;
@@ -2407,7 +2971,11 @@ export const OverlayApp: React.FC = () => {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onPointerLeave={() => setLoupeInfo(null)}
+        onPointerLeave={() => {
+          if (dragRef.current.kind === "none") {
+            setLoupeInfo(null);
+          }
+        }}
       />
 
       {/* Hidden file picker for static Photo Stickers only (no GIF) */}
@@ -2425,7 +2993,7 @@ export const OverlayApp: React.FC = () => {
       />
 
       {/* Top instruction & quick mode pill when selecting */}
-      {!selection && (
+      {!selection && showTopBarHere && (
         <div
           className="top-mode-bar"
           style={{
@@ -2467,8 +3035,8 @@ export const OverlayApp: React.FC = () => {
                 updateSelection({
                   x: 0,
                   y: 0,
-                  w: viewport.w,
-                  h: viewport.h,
+                  w: virtSize.w,
+                  h: virtSize.h,
                   shape: "rect",
                 });
               }}
@@ -2495,7 +3063,7 @@ export const OverlayApp: React.FC = () => {
         </div>
       )}
 
-      {selection && captureMode === "quickCopy" && (
+      {selection && captureMode === "quickCopy" && showTopBarHere && (
         <div
           className="top-mode-bar"
           style={{
@@ -2516,12 +3084,18 @@ export const OverlayApp: React.FC = () => {
       )}
 
       {/* Window hover label */}
-      {!selection && captureMode === "window" && hoveredWin && (
+      {!selection && captureMode === "window" && hoveredWin && showTopBarHere && (
         <div
           className="window-badge"
           style={{
-            left: Math.max(12, hoveredWin.rx * viewport.w + 10),
-            top: Math.max(58, hoveredWin.ry * viewport.h + 10),
+            left: Math.max(
+              12,
+              Math.min(viewport.w - 220, hoveredWin.rx * virtSize.w - myScreen.lx + 10)
+            ),
+            top: Math.max(
+              58,
+              Math.min(viewport.h - 44, hoveredWin.ry * virtSize.h - myScreen.ly + 10)
+            ),
           }}
         >
           <strong>{hoveredWin.appName}</strong> — {hoveredWin.title}
@@ -2529,16 +3103,10 @@ export const OverlayApp: React.FC = () => {
       )}
 
       {/* Selection dimension readout (flips inside top-left if close to screen top) */}
-      {selection && (
+      {showSelectionChromeHere && selection && (
         <div
           className="dim-badge"
-          style={{
-            left: Math.max(10, selection.x + (selection.y < 36 ? 10 : 0)),
-            top:
-              selection.y >= 36
-                ? selection.y - 28
-                : Math.min(viewport.h - 32, selection.y + 10),
-          }}
+          style={localDimBadgePos}
         >
           {Math.round(selection.w)} × {Math.round(selection.h)} px ·{" "}
           {captureMode === "quickCopy"
@@ -2550,14 +3118,14 @@ export const OverlayApp: React.FC = () => {
       )}
 
       {/* Inline Text Entry */}
-      {textInput && (
+      {textInput && textInput.screenIndex === CURRENT_SCREEN_INDEX && (
         <textarea
           ref={textareaRef}
           autoFocus
           className="inline-text-box"
           style={{
-            left: textInput.x,
-            top: textInput.y,
+            left: textInput.x - myScreen.lx,
+            top: textInput.y - myScreen.ly,
             color: textInput.color,
             fontSize: textInput.fontSize,
             fontWeight: textInput.bold ? 700 : 400,

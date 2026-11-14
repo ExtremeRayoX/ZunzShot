@@ -61,15 +61,20 @@ export const TRANSLATIONS = {
     shortcutsTitle: "Atajos globales de teclado",
     shortcutHint:
       "Haz clic en un atajo y presiona las teclas a la vez (siempre más de 1 tecla, ej. ⌘/Ctrl + Shift + tecla).",
+    shortcutHintWindows:
+      "Haz clic en un atajo y presiona las teclas a la vez (mín. 2 teclas, o Print Screen solo o combinado ej. Shift + PrtSc).",
     shortcutsOverlayTitle: "Comandos de barra lateral (dentro de captura)",
     shortcutsOverlayHint:
       "Configura teclas rápidas para copiar, guardar, fijar, compartir, imprimir o cerrar sin usar el mouse (1 tecla o combinación).",
     shortcutRecordingPlaceholder: "Presiona teclas (mín. 2)...",
+    shortcutRecordingPlaceholderWindows: "Presiona teclas (mín. 2, o PrtSc)...",
     shortcutOverlayRecordingPlaceholder: "Presiona tecla o combinación...",
     shortcutChangeBtn: "Cambiar",
     shortcutCancelBtn: "Cancelar",
     shortcutResetDefaultsBtn: "Restaurar predeterminados",
     shortcutNeedMoreKeys: "Debes combinar más de 1 tecla (por ejemplo, Cmd/Ctrl/Alt/Shift + una tecla).",
+    shortcutNeedMoreKeysWindows:
+      "Debes combinar más de 1 tecla (Cmd/Ctrl/Alt/Shift + otra tecla), o usar Print Screen solo o combinado.",
     shortcutDuplicateErr: "Ese atajo ya está asignado a otro modo de captura.",
     shortcutOverlayDuplicateErr: "Ese comando ya está asignado a otra acción de la barra lateral.",
     shortcutUnsupportedKey: "Tecla no compatible como atajo; prueba letras, números, F1-F12, Esc o Espacio.",
@@ -312,15 +317,20 @@ export const TRANSLATIONS = {
     shortcutsTitle: "Global Keyboard Shortcuts",
     shortcutHint:
       "Click a shortcut and press your key combo together (always more than 1 key, e.g. ⌘/Ctrl + Shift + key).",
+    shortcutHintWindows:
+      "Click a shortcut and press your key combo together (min 2 keys, or Print Screen alone or combined e.g. Shift + PrtSc).",
     shortcutsOverlayTitle: "Vertical Action Bar Commands (inside capture)",
     shortcutsOverlayHint:
       "Customize hotkeys to copy, save, pin, share, print, or close without reaching for the mouse (single key or combo).",
     shortcutRecordingPlaceholder: "Press keys (min 2)...",
+    shortcutRecordingPlaceholderWindows: "Press keys (min 2, or PrtSc)...",
     shortcutOverlayRecordingPlaceholder: "Press a key or combo...",
     shortcutChangeBtn: "Record",
     shortcutCancelBtn: "Cancel",
     shortcutResetDefaultsBtn: "Reset defaults",
     shortcutNeedMoreKeys: "Always combine more than 1 key (e.g. Cmd/Ctrl/Alt/Shift + another key).",
+    shortcutNeedMoreKeysWindows:
+      "Combine more than 1 key (Cmd/Ctrl/Alt/Shift + another key), or use Print Screen alone or combined.",
     shortcutDuplicateErr: "That shortcut is already assigned to another capture mode.",
     shortcutOverlayDuplicateErr: "That hotkey is already assigned to another vertical bar command.",
     shortcutUnsupportedKey: "Unsupported key for shortcut; try letters, digits, F1-F12, Esc, or Space.",

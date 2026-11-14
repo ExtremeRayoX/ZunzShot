@@ -18,10 +18,9 @@ use std::time::Duration;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
-use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, Size, State,
-    WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
-};
+#[cfg(target_os = "windows")]
+use tauri::{PhysicalPosition, PhysicalSize, Position, Size};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_updater::UpdaterExt;
@@ -45,9 +44,34 @@ struct MonitorBounds {
     phys_w: u32,
     phys_h: u32,
     scale: f64,
+    display_id: u32,
+    logical_x: f64,
+    logical_y: f64,
+    logical_w: f64,
+    logical_h: f64,
 }
 
 static LAST_MONITOR_BOUNDS: Mutex<Option<MonitorBounds>> = Mutex::new(None);
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy)]
+struct MacScreenPlacement {
+    index: usize,
+    display_id: u32,
+    global_lx: f64,
+    global_ly: f64,
+    lw: f64,
+    lh: f64,
+}
+#[cfg(target_os = "macos")]
+static LAST_MACOS_SCREENS: Mutex<(usize, Vec<MacScreenPlacement>)> = Mutex::new((0, Vec::new()));
+#[cfg(target_os = "macos")]
+static LAST_MACOS_VIRT_ORIGIN: Mutex<(f64, f64)> = Mutex::new((0.0, 0.0));
+#[cfg(target_os = "macos")]
+static LAST_MACOS_CURSOR_SCALE: Mutex<f64> = Mutex::new(1.0);
+#[cfg(target_os = "macos")]
+static MACOS_DRAG_ACTIVE: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "macos")]
+static MACOS_DRAG_SEQ: AtomicU64 = AtomicU64::new(0);
 
 struct CaptureInProgressGuard;
 
@@ -575,20 +599,65 @@ fn open_settings_tab(app: &AppHandle, tab: &str) {
     let _ = app.emit("zunzshot://open-tab", tab);
 }
 
-fn ensure_overlay_window(app: &AppHandle) -> Option<WebviewWindow> {
+fn overlay_window_label(index: usize) -> String {
+    if index == 0 {
+        "overlay".to_string()
+    } else {
+        format!("overlay-{index}")
+    }
+}
+
+fn overlay_window_index(label: &str) -> Option<usize> {
+    if label == "overlay" {
+        Some(0)
+    } else {
+        label.strip_prefix("overlay-")?.parse::<usize>().ok()
+    }
+}
+
+fn all_overlay_windows(app: &AppHandle) -> Vec<(usize, WebviewWindow)> {
+    let mut wins: Vec<(usize, WebviewWindow)> = app
+        .webview_windows()
+        .into_iter()
+        .filter_map(|(label, win)| overlay_window_index(&label).map(|idx| (idx, win)))
+        .collect();
+    wins.sort_by_key(|(idx, _)| *idx);
+    wins
+}
+
+fn focus_platform_overlay_window(ov: &WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    force_windows_foreground_and_webview_focus(ov);
+    #[cfg(not(target_os = "windows"))]
+    {
+        #[cfg(target_os = "macos")]
+        if let Ok(ns_win_ptr) = ov.ns_window() {
+            if !ns_win_ptr.is_null() {
+                let ns_win = unsafe { &*(ns_win_ptr as *const objc2_app_kit::NSWindow) };
+                ns_win.makeKeyAndOrderFront(None);
+            }
+        }
+        let _ = ov.set_focus();
+        let _ = AsRef::<tauri::Webview<_>>::as_ref(ov).set_focus();
+    }
+}
+
+fn ensure_overlay_window_for_index(app: &AppHandle, index: usize) -> Option<WebviewWindow> {
+    let label = overlay_window_label(index);
     #[cfg(target_os = "windows")]
     {
         let _build_guard = OVERLAY_BUILD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(ov) = app.get_webview_window("overlay") {
+        if let Some(ov) = app.get_webview_window(&label) {
             return Some(ov);
         }
-        let cfg = app
+        let mut cfg = app
             .config()
             .app
             .windows
             .iter()
             .find(|w| w.label == "overlay")
             .cloned()?;
+        cfg.label = label;
         let win = WebviewWindowBuilder::from_config(app, &cfg)
             .ok()
             .and_then(|b| b.visible(false).build().ok())?;
@@ -598,20 +667,25 @@ fn ensure_overlay_window(app: &AppHandle) -> Option<WebviewWindow> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        if let Some(ov) = app.get_webview_window("overlay") {
+        if let Some(ov) = app.get_webview_window(&label) {
             return Some(ov);
         }
-        let cfg = app
+        let mut cfg = app
             .config()
             .app
             .windows
             .iter()
             .find(|w| w.label == "overlay")
             .cloned()?;
+        cfg.label = label;
         WebviewWindowBuilder::from_config(app, &cfg)
             .ok()
             .and_then(|b| b.visible(false).build().ok())
     }
+}
+
+fn ensure_overlay_window(app: &AppHandle) -> Option<WebviewWindow> {
+    ensure_overlay_window_for_index(app, 0)
 }
 
 fn trigger_capture(app: AppHandle, mode: String) {
@@ -624,26 +698,35 @@ fn trigger_capture(app: AppHandle, mode: String) {
 
     // If an active capture overlay is already visible, switch its mode instead of
     // re-capturing over the dimmed overlay window.
-    if let Some(ov) = app.get_webview_window("overlay") {
-        let has_active_session = app
+    let existing_overlays = all_overlay_windows(&app);
+    if existing_overlays
+        .iter()
+        .any(|(_, w)| w.is_visible().unwrap_or(false))
+    {
+        let active_idx_opt = app
             .state::<Mutex<AppState>>()
             .lock()
             .unwrap()
             .active_session
-            .is_some();
-        if has_active_session && ov.is_visible().unwrap_or(false) {
-            let _ = ov.emit("zunzshot://switch-mode", &mode);
-            let ov_focus = ov.clone();
-            let _ = app.run_on_main_thread(move || {
-                #[cfg(target_os = "windows")]
-                force_windows_foreground_and_webview_focus(&ov_focus);
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let _ = ov_focus.set_focus();
-                    let _ = AsRef::<tauri::Webview<_>>::as_ref(&ov_focus).set_focus();
+            .as_ref()
+            .map(|s| s.metadata.active_screen_index);
+        if let Some(active_idx) = active_idx_opt {
+            for (_, ov) in &existing_overlays {
+                if ov.is_visible().unwrap_or(false) {
+                    let _ = ov.emit("zunzshot://switch-mode", &mode);
                 }
-                let _ = ov_focus.emit("zunzshot://focus-canvas", ());
-            });
+            }
+            let target_ov = existing_overlays
+                .iter()
+                .find(|(idx, _)| *idx == active_idx)
+                .or_else(|| existing_overlays.first())
+                .map(|(_, w)| w.clone());
+            if let Some(ov_focus) = target_ov {
+                let _ = app.run_on_main_thread(move || {
+                    focus_platform_overlay_window(&ov_focus);
+                    let _ = ov_focus.emit("zunzshot://focus-canvas", ());
+                });
+            }
             return;
         }
     }
@@ -659,12 +742,17 @@ fn trigger_capture(app: AppHandle, mode: String) {
         let _capture_guard = CaptureInProgressGuard;
 
         *LAST_OVERLAY_RECT.lock().unwrap() = None;
+        #[cfg(target_os = "macos")]
+        {
+            MACOS_DRAG_ACTIVE.store(false, Ordering::SeqCst);
+            *LAST_MACOS_SCREENS.lock().unwrap() = (0, Vec::new());
+        }
         {
             let state = app.state::<Mutex<AppState>>();
             state.lock().unwrap().active_session = None;
         }
 
-        if let Some(ov) = app.get_webview_window("overlay") {
+        for (_, ov) in all_overlay_windows(&app) {
             let _ = ov.emit("zunzshot://session-reset", ());
         }
 
@@ -679,11 +767,12 @@ fn trigger_capture(app: AppHandle, mode: String) {
                         hid_any = true;
                     }
                 }
-                if let Some(ov) = app_hide.get_webview_window("overlay") {
-                    if ov.is_visible().unwrap_or(false) {
-                        hide_overlay_on_main_thread(&app_hide, &[], false);
-                        hid_any = true;
-                    }
+                if all_overlay_windows(&app_hide)
+                    .iter()
+                    .any(|(_, w)| w.is_visible().unwrap_or(false))
+                {
+                    hide_overlay_on_main_thread(&app_hide, &[], false);
+                    hid_any = true;
                 }
                 let _ = tx.send(hid_any);
             })
@@ -700,13 +789,53 @@ fn trigger_capture(app: AppHandle, mode: String) {
                 let phys_w = session.monitor_phys_w;
                 let phys_h = session.monitor_phys_h;
                 let toast_sc = session.toast_scale.max(1.0);
+                let active_screen_idx = session.metadata.active_screen_index;
+                let active_screen_info = session
+                    .metadata
+                    .screens
+                    .get(active_screen_idx)
+                    .cloned()
+                    .unwrap_or_else(|| session.metadata.screens[0].clone());
+                let virt_lx = session.virt_logical_x;
+                let virt_ly = session.virt_logical_y;
                 *LAST_MONITOR_BOUNDS.lock().unwrap() = Some(MonitorBounds {
                     phys_x: session.toast_phys_x,
                     phys_y: session.toast_phys_y,
                     phys_w: session.toast_phys_w,
                     phys_h: session.toast_phys_h,
                     scale: toast_sc,
+                    display_id: session.toast_display_id,
+                    logical_x: virt_lx + active_screen_info.lx,
+                    logical_y: virt_ly + active_screen_info.ly,
+                    logical_w: active_screen_info.lw,
+                    logical_h: active_screen_info.lh,
                 });
+
+                #[cfg(target_os = "macos")]
+                let mac_placements: Vec<MacScreenPlacement> = {
+                    let cursor_sc = app
+                        .primary_monitor()
+                        .ok()
+                        .flatten()
+                        .map(|m| m.scale_factor())
+                        .unwrap_or(1.0)
+                        .max(1.0);
+                    *LAST_MACOS_VIRT_ORIGIN.lock().unwrap() = (virt_lx, virt_ly);
+                    *LAST_MACOS_CURSOR_SCALE.lock().unwrap() = cursor_sc;
+                    session
+                        .metadata
+                        .screens
+                        .iter()
+                        .map(|s| MacScreenPlacement {
+                            index: s.index,
+                            display_id: s.display_id,
+                            global_lx: virt_lx + s.lx,
+                            global_ly: virt_ly + s.ly,
+                            lw: s.lw,
+                            lh: s.lh,
+                        })
+                        .collect()
+                };
 
                 {
                     let state = app.state::<Mutex<AppState>>();
@@ -717,14 +846,39 @@ fn trigger_capture(app: AppHandle, mode: String) {
                 #[cfg(target_os = "windows")]
                 {
                     let _ = ensure_overlay_window(&app);
+                    present_overlay_window(
+                        &app,
+                        (phys_x, phys_y, phys_w, phys_h),
+                        true,
+                        true,
+                    );
                 }
 
-                present_overlay_window(
-                    &app,
-                    (phys_x, phys_y, phys_w, phys_h),
-                    true,
-                    true,
-                );
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = (phys_x, phys_y, phys_w, phys_h);
+                    *LAST_MACOS_SCREENS.lock().unwrap() =
+                        (active_screen_idx, mac_placements.clone());
+                    *LAST_OVERLAY_RECT.lock().unwrap() = Some((phys_x, phys_y, phys_w, phys_h));
+                    present_macos_overlay_windows(
+                        &app,
+                        mac_placements,
+                        active_screen_idx,
+                        true,
+                        true,
+                    );
+                }
+
+                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                {
+                    let _ = (virt_lx, virt_ly, active_screen_idx);
+                    present_overlay_window(
+                        &app,
+                        (phys_x, phys_y, phys_w, phys_h),
+                        true,
+                        true,
+                    );
+                }
             }
             Err(err) => {
                 {
@@ -907,75 +1061,270 @@ fn get_capture_metadata(state: State<'_, Mutex<AppState>>) -> Option<CaptureMeta
 }
 
 #[tauri::command]
-fn get_capture_rgba(state: State<'_, Mutex<AppState>>) -> Result<Response, String> {
+fn get_capture_rgba(
+    state: State<'_, Mutex<AppState>>,
+    screen_index: Option<usize>,
+) -> Result<Response, String> {
     let guard = state.lock().unwrap();
     let session = guard
         .active_session
         .as_ref()
         .ok_or_else(|| "No active capture session".to_string())?;
 
-    let w = session.metadata.image_width;
-    let h = session.metadata.image_height;
-    let mut payload = Vec::with_capacity(8 + session.rgba_bytes.len());
+    let idx = screen_index.unwrap_or(0);
+    let slice = session
+        .screen_slices
+        .get(idx)
+        .or_else(|| session.screen_slices.first())
+        .ok_or_else(|| "No capture screen slice available".to_string())?;
+
+    let w = slice.info.pixel_w;
+    let h = slice.info.pixel_h;
+    let mut payload = Vec::with_capacity(8 + slice.rgba.len());
     payload.extend_from_slice(&w.to_le_bytes());
     payload.extend_from_slice(&h.to_le_bytes());
-    payload.extend_from_slice(&session.rgba_bytes);
+    payload.extend_from_slice(&slice.rgba);
     Ok(Response::new(payload))
+}
+
+#[tauri::command]
+fn get_capture_region_rgba(
+    state: State<'_, Mutex<AppState>>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> Result<Response, String> {
+    let guard = state.lock().unwrap();
+    let session = guard
+        .active_session
+        .as_ref()
+        .ok_or_else(|| "No active capture session".to_string())?;
+
+    let (out_w, out_h, rgba) =
+        capture::compose_virtual_region_rgba(&session.screen_slices, x, y, w, h)?;
+    let mut payload = Vec::with_capacity(8 + rgba.len());
+    payload.extend_from_slice(&out_w.to_le_bytes());
+    payload.extend_from_slice(&out_h.to_le_bytes());
+    payload.extend_from_slice(&rgba);
+    Ok(Response::new(payload))
+}
+
+#[tauri::command]
+#[allow(unused_variables)]
+fn set_macos_drag_monitor(app: AppHandle, active: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        if !active {
+            MACOS_DRAG_ACTIVE.store(false, Ordering::SeqCst);
+            return;
+        }
+        let seq = MACOS_DRAG_SEQ.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
+        MACOS_DRAG_ACTIVE.store(true, Ordering::SeqCst);
+        let app_handle = app.clone();
+        std::thread::spawn(move || {
+            use objc2_core_graphics::{CGEventSource, CGEventSourceStateID, CGMouseButton};
+
+            #[derive(Clone, serde::Serialize)]
+            struct DragPointPayload {
+                vx: f64,
+                vy: f64,
+            }
+
+            let mut last_vx = f64::NAN;
+            let mut last_vy = f64::NAN;
+            while MACOS_DRAG_ACTIVE.load(Ordering::SeqCst)
+                && MACOS_DRAG_SEQ.load(Ordering::SeqCst) == seq
+            {
+                let (virt_lx, virt_ly) = *LAST_MACOS_VIRT_ORIGIN.lock().unwrap();
+                let cursor_scale = (*LAST_MACOS_CURSOR_SCALE.lock().unwrap()).max(1.0);
+                let pos = app_handle.cursor_position().ok();
+                let pressed = CGEventSource::button_state(
+                    CGEventSourceStateID::CombinedSessionState,
+                    CGMouseButton::Left,
+                );
+
+                if let Some(p) = pos {
+                    let vx = p.x / cursor_scale - virt_lx;
+                    let vy = p.y / cursor_scale - virt_ly;
+                    if !pressed {
+                        let _ = app_handle.emit("zunzshot://global-drag-up", DragPointPayload { vx, vy });
+                        break;
+                    }
+                    if (vx - last_vx).abs() >= 0.25 || (vy - last_vy).abs() >= 0.25 {
+                        last_vx = vx;
+                        last_vy = vy;
+                        let _ = app_handle.emit("zunzshot://global-drag-move", DragPointPayload { vx, vy });
+                    }
+                } else if !pressed {
+                    let _ = app_handle.emit(
+                        "zunzshot://global-drag-up",
+                        DragPointPayload {
+                            vx: if last_vx.is_finite() { last_vx } else { 0.0 },
+                            vy: if last_vy.is_finite() { last_vy } else { 0.0 },
+                        },
+                    );
+                    break;
+                }
+
+                std::thread::sleep(Duration::from_millis(8));
+            }
+            if MACOS_DRAG_SEQ.load(Ordering::SeqCst) == seq {
+                MACOS_DRAG_ACTIVE.store(false, Ordering::SeqCst);
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, active);
+    }
 }
 
 static LAST_OVERLAY_RECT: std::sync::Mutex<Option<(i32, i32, u32, u32)>> =
     std::sync::Mutex::new(None);
 
 #[cfg(target_os = "macos")]
-fn matching_macos_screen_rect(
+fn ns_screen_rect_for_display(
     mtm: objc2::MainThreadMarker,
-    phys_x: i32,
-    phys_y: i32,
-    phys_w: u32,
-    phys_h: u32,
-    fallback_scale: f64,
+    display_id: u32,
+    fallback_lx: f64,
+    fallback_ly: f64,
+    fallback_lw: f64,
+    fallback_lh: f64,
 ) -> objc2_foundation::NSRect {
     use objc2_app_kit::NSScreen;
-    use objc2_foundation::{NSPoint, NSRect, NSSize};
+    use objc2_foundation::{NSNumber, NSPoint, NSRect, NSSize, NSString};
 
     let screens = NSScreen::screens(mtm);
-    let sc = fallback_scale.max(1.0);
     let primary_h = if !screens.is_empty() {
         screens.objectAtIndex(0).frame().size.height
     } else {
-        phys_h as f64 / sc
+        fallback_lh.max(900.0)
     };
 
-    let fallback_lx = phys_x as f64 / sc;
-    let fallback_ly = phys_y as f64 / sc;
-    let fallback_lw = phys_w as f64 / sc;
-    let fallback_lh = phys_h as f64 / sc;
-    let mut target_rect = NSRect::new(
-        NSPoint::new(fallback_lx, primary_h - (fallback_ly + fallback_lh)),
-        NSSize::new(fallback_lw, fallback_lh),
-    );
-
-    let count = screens.len();
-    let mut best_dist = f64::MAX;
-    for idx in 0..count {
-        let screen = screens.objectAtIndex(idx);
-        let sf = screen.frame();
-        let s_scale = screen.backingScaleFactor().max(1.0);
-        let size_match = ((sf.size.width * s_scale).round() - phys_w as f64).abs() <= 4.0
-            && ((sf.size.height * s_scale).round() - phys_h as f64).abs() <= 4.0;
-        let screen_top_y = primary_h - (sf.origin.y + sf.size.height);
-        let dx = sf.origin.x * s_scale - phys_x as f64;
-        let dy = screen_top_y * s_scale - phys_y as f64;
-        let dist = dx * dx + dy * dy;
-        if count == 1 || (size_match && dist < best_dist) {
-            best_dist = dist;
-            target_rect = sf;
+    if display_id != 0 {
+        let key = NSString::from_str("NSScreenNumber");
+        let count = screens.len();
+        for idx in 0..count {
+            let screen = screens.objectAtIndex(idx);
+            let desc = screen.deviceDescription();
+            if let Some(obj) = desc.objectForKey(&key) {
+                if let Ok(num) = obj.downcast::<NSNumber>() {
+                    if num.unsignedIntValue() == display_id {
+                        return screen.frame();
+                    }
+                }
+            }
         }
     }
 
-    target_rect
+    NSRect::new(
+        NSPoint::new(fallback_lx, primary_h - (fallback_ly + fallback_lh)),
+        NSSize::new(fallback_lw.max(1.0), fallback_lh.max(1.0)),
+    )
 }
 
+#[cfg(target_os = "macos")]
+fn apply_macos_screen_overlay_window(
+    ov: &tauri::WebviewWindow,
+    placement: MacScreenPlacement,
+    elevated: bool,
+    make_key: bool,
+    emit_ready: bool,
+) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSWindow, NSWindowCollectionBehavior};
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Ok(ns_win_ptr) = ov.ns_window() else {
+        return;
+    };
+    if ns_win_ptr.is_null() {
+        return;
+    }
+    let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
+    let target_rect = ns_screen_rect_for_display(
+        mtm,
+        placement.display_id,
+        placement.global_lx,
+        placement.global_ly,
+        placement.lw,
+        placement.lh,
+    );
+
+    let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
+        | NSWindowCollectionBehavior::FullScreenAuxiliary
+        | NSWindowCollectionBehavior::IgnoresCycle
+        | NSWindowCollectionBehavior::Stationary;
+    ns_win.setCollectionBehavior(behavior);
+    ns_win.setHidesOnDeactivate(false);
+
+    if elevated {
+        // kCGScreenSaverWindowLevel (1000) renders cleanly over macOS Menu Bar, Notch & Dock.
+        ns_win.setLevel(1000);
+        ns_win.setFrame_display(target_rect, true);
+        let _ = ov.show();
+        ns_win.setLevel(1000);
+        ns_win.setFrame_display(target_rect, true);
+        if make_key {
+            ns_win.makeKeyAndOrderFront(None);
+            ns_win.orderFrontRegardless();
+            #[allow(deprecated)]
+            NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+            let _ = ov.set_focus();
+            let _ = AsRef::<tauri::Webview<_>>::as_ref(ov).set_focus();
+        } else {
+            ns_win.orderFrontRegardless();
+        }
+    } else {
+        // Temporarily drop to normal window level so NSSavePanel / file picker appears on top.
+        ns_win.setLevel(0);
+    }
+
+    if emit_ready {
+        let _ = ov.emit("zunzshot://session-ready", ());
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn present_macos_overlay_windows(
+    app: &AppHandle,
+    placements: Vec<MacScreenPlacement>,
+    active_screen_idx: usize,
+    elevated: bool,
+    emit_ready: bool,
+) {
+    let app_handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        // Destroy any stale extra screen overlays if fewer monitors are connected now
+        for (idx, win) in all_overlay_windows(&app_handle) {
+            if idx >= placements.len() {
+                let _ = win.hide();
+                let _ = win.destroy();
+            }
+        }
+
+        let mut active_win: Option<(WebviewWindow, MacScreenPlacement)> = None;
+        for placement in &placements {
+            if let Some(win) = ensure_overlay_window_for_index(&app_handle, placement.index) {
+                if placement.index == active_screen_idx {
+                    active_win = Some((win, *placement));
+                } else {
+                    apply_macos_screen_overlay_window(&win, *placement, elevated, false, emit_ready);
+                }
+            }
+        }
+
+        // Present and focus the cursor's active screen window last so it holds keyboard focus
+        if let Some((win, placement)) = active_win {
+            apply_macos_screen_overlay_window(&win, placement, elevated, true, emit_ready);
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
 fn apply_native_overlay_window(
     ov: &tauri::WebviewWindow,
     phys_x: i32,
@@ -985,54 +1334,6 @@ fn apply_native_overlay_window(
     elevated: bool,
     emit_ready: bool,
 ) {
-    #[cfg(target_os = "macos")]
-    {
-        use objc2::MainThreadMarker;
-        use objc2_app_kit::{NSApplication, NSWindow, NSWindowCollectionBehavior};
-
-        if let Some(mtm) = MainThreadMarker::new() {
-            if let Ok(ns_win_ptr) = ov.ns_window() {
-                if !ns_win_ptr.is_null() {
-                    let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
-                    let ov_scale = ov.scale_factor().unwrap_or(2.0).max(1.0);
-                    let target_rect = matching_macos_screen_rect(
-                        mtm, phys_x, phys_y, phys_w, phys_h, ov_scale,
-                    );
-
-                    let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
-                        | NSWindowCollectionBehavior::FullScreenAuxiliary
-                        | NSWindowCollectionBehavior::IgnoresCycle
-                        | NSWindowCollectionBehavior::Stationary;
-                    ns_win.setCollectionBehavior(behavior);
-                    ns_win.setHidesOnDeactivate(false);
-
-                    if elevated {
-                        // kCGScreenSaverWindowLevel (1000) renders cleanly over macOS Menu Bar, Notch & Dock.
-                        ns_win.setLevel(1000);
-                        ns_win.setFrame_display(target_rect, true);
-                        let _ = ov.show();
-                        ns_win.setLevel(1000);
-                        ns_win.setFrame_display(target_rect, true);
-                        ns_win.makeKeyAndOrderFront(None);
-                        ns_win.orderFrontRegardless();
-                        #[allow(deprecated)]
-                        NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
-                        let _ = ov.set_focus();
-                        let _ = AsRef::<tauri::Webview<_>>::as_ref(ov).set_focus();
-                    } else {
-                        // Temporarily drop to normal window level so NSSavePanel / file picker appears on top.
-                        ns_win.setLevel(0);
-                    }
-
-                    if emit_ready {
-                        let _ = ov.emit("zunzshot://session-ready", ());
-                    }
-                    return;
-                }
-            }
-        }
-    }
-
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::Foundation::HWND;
@@ -1137,6 +1438,7 @@ fn apply_native_overlay_window(
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn present_overlay_window(
     app: &AppHandle,
     rect: (i32, i32, u32, u32),
@@ -1197,7 +1499,7 @@ fn present_overlay_window(
         });
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let app_handle = app.clone();
         let _ = app.run_on_main_thread(move || {
@@ -1213,17 +1515,28 @@ fn present_overlay_window(
 
 #[tauri::command]
 fn set_overlay_elevated(app: AppHandle, elevated: bool) {
-    let rect = *LAST_OVERLAY_RECT.lock().unwrap();
-    if let Some(rect) = rect {
-        if app.get_webview_window("overlay").is_some() {
-            present_overlay_window(&app, rect, elevated, false);
+    #[cfg(target_os = "macos")]
+    {
+        let (active_idx, placements) = LAST_MACOS_SCREENS.lock().unwrap().clone();
+        if !placements.is_empty() {
+            present_macos_overlay_windows(&app, placements, active_idx, elevated, false);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let rect = *LAST_OVERLAY_RECT.lock().unwrap();
+        if let Some(rect) = rect {
+            if app.get_webview_window("overlay").is_some() {
+                present_overlay_window(&app, rect, elevated, false);
+            }
         }
     }
 }
 
 #[tauri::command]
-fn focus_overlay_window(app: AppHandle) {
+fn focus_overlay_window(app: AppHandle, screen_index: Option<usize>) {
     let app_handle = app.clone();
+    let target_label = overlay_window_label(screen_index.unwrap_or(0));
     let _ = app.run_on_main_thread(move || {
         #[cfg(target_os = "windows")]
         {
@@ -1238,22 +1551,22 @@ fn focus_overlay_window(app: AppHandle) {
                 return;
             }
         }
-        if let Some(ov) = app_handle.get_webview_window("overlay") {
+        if let Some(ov) = app_handle
+            .get_webview_window(&target_label)
+            .or_else(|| app_handle.get_webview_window("overlay"))
+        {
             if ov.is_visible().unwrap_or(false) {
-                #[cfg(target_os = "windows")]
-                force_windows_foreground_and_webview_focus(&ov);
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let _ = ov.set_focus();
-                    let _ = AsRef::<tauri::Webview<_>>::as_ref(&ov).set_focus();
-                }
+                focus_platform_overlay_window(&ov);
             }
         }
     });
 }
 
 fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destroy_ov: bool) {
-    if let Some(ov) = app_handle.get_webview_window("overlay") {
+    #[cfg(target_os = "macos")]
+    MACOS_DRAG_ACTIVE.store(false, Ordering::SeqCst);
+
+    for (_, ov) in all_overlay_windows(app_handle) {
         let _ = ov.emit("zunzshot://session-reset", ());
         #[cfg(target_os = "windows")]
         if let Ok(hwnd) = ov.hwnd() {
@@ -1280,6 +1593,7 @@ fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destr
             {
                 // Defer WebView2 teardown off the synchronous WebResourceRequested IPC stack.
                 let app_destroy = app_handle.clone();
+                let label_destroy = ov.label().to_string();
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(60));
                     let app_inner = app_destroy.clone();
@@ -1294,7 +1608,7 @@ fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destr
                                 && !CAPTURE_IN_PROGRESS.load(Ordering::SeqCst)
                         };
                         if can_destroy {
-                            if let Some(ov_win) = app_inner.get_webview_window("overlay") {
+                            if let Some(ov_win) = app_inner.get_webview_window(&label_destroy) {
                                 let _ = ov_win.destroy();
                             }
                         }
@@ -1331,6 +1645,11 @@ fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destr
 #[tauri::command]
 fn close_overlay(app: AppHandle, state: State<'_, Mutex<AppState>>) {
     *LAST_OVERLAY_RECT.lock().unwrap() = None;
+    #[cfg(target_os = "macos")]
+    {
+        MACOS_DRAG_ACTIVE.store(false, Ordering::SeqCst);
+        *LAST_MACOS_SCREENS.lock().unwrap() = (0, Vec::new());
+    }
     let (ultra_light, pin_ids): (bool, Vec<String>) = {
         let mut guard = state.lock().unwrap();
         guard.active_session = None;
@@ -1441,19 +1760,49 @@ fn show_copy_notification(
     title: String,
     subtitle: String,
     close_overlay: Option<bool>,
+    screen_index: Option<usize>,
 ) {
     let should_close = close_overlay.unwrap_or(false);
-    let (ultra_light, pin_ids): (bool, Vec<String>) = if should_close {
-        *LAST_OVERLAY_RECT.lock().unwrap() = None;
+    let (ultra_light, pin_ids, screen_override): (bool, Vec<String>, Option<MonitorBounds>) = {
         let mut guard = state.lock().unwrap();
-        guard.active_session = None;
-        (
-            guard.settings.ultra_light_mode,
-            guard.pinned_images.keys().cloned().collect(),
-        )
-    } else {
-        (false, Vec::new())
+        let override_bounds = screen_index.and_then(|idx| {
+            let s = guard.active_session.as_ref()?;
+            let scr = s.metadata.screens.get(idx)?;
+            let global_lx = s.virt_logical_x + scr.lx;
+            let global_ly = s.virt_logical_y + scr.ly;
+            Some(MonitorBounds {
+                phys_x: (global_lx * scr.scale_factor).round() as i32,
+                phys_y: (global_ly * scr.scale_factor).round() as i32,
+                phys_w: scr.pixel_w,
+                phys_h: scr.pixel_h,
+                scale: scr.scale_factor,
+                display_id: scr.display_id,
+                logical_x: global_lx,
+                logical_y: global_ly,
+                logical_w: scr.lw,
+                logical_h: scr.lh,
+            })
+        });
+        if should_close {
+            *LAST_OVERLAY_RECT.lock().unwrap() = None;
+            #[cfg(target_os = "macos")]
+            {
+                MACOS_DRAG_ACTIVE.store(false, Ordering::SeqCst);
+                *LAST_MACOS_SCREENS.lock().unwrap() = (0, Vec::new());
+            }
+            guard.active_session = None;
+            (
+                guard.settings.ultra_light_mode,
+                guard.pinned_images.keys().cloned().collect(),
+                override_bounds,
+            )
+        } else {
+            (false, Vec::new(), override_bounds)
+        }
     };
+    if let Some(ov_bounds) = screen_override {
+        *LAST_MONITOR_BOUNDS.lock().unwrap() = Some(ov_bounds);
+    }
 
     let gen = NEXT_TOAST_ID.fetch_add(1, Ordering::Relaxed);
     let toast_id = format!("copy-toast-{gen}");
@@ -1469,6 +1818,11 @@ fn show_copy_notification(
         phys_w: 1440,
         phys_h: 900,
         scale: 1.0,
+        display_id: 0,
+        logical_x: 0.0,
+        logical_y: 0.0,
+        logical_w: 1440.0,
+        logical_h: 900.0,
     });
     let mon_phys_x = bounds.phys_x;
     let mon_phys_y = bounds.phys_y;
@@ -1604,8 +1958,13 @@ fn show_copy_notification(
                 use objc2_foundation::NSPoint;
 
                 if let Some(mtm) = MainThreadMarker::new() {
-                    let sf = matching_macos_screen_rect(
-                        mtm, mon_phys_x, mon_phys_y, mon_phys_w, mon_phys_h, sc,
+                    let sf = ns_screen_rect_for_display(
+                        mtm,
+                        bounds.display_id,
+                        bounds.logical_x,
+                        bounds.logical_y,
+                        bounds.logical_w,
+                        bounds.logical_h,
                     );
                     if let Ok(ns_win_ptr) = win.ns_window() {
                         if !ns_win_ptr.is_null() {
@@ -1771,6 +2130,7 @@ fn share_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
     let anchor_y = parse_f64("x-anchor-y", 120.0);
     let anchor_w = parse_f64("x-anchor-w", 28.0);
     let anchor_h = parse_f64("x-anchor-h", 28.0);
+    let screen_index = parse_f64("x-screen-index", 0.0).max(0.0) as usize;
 
     let temp_path = write_temp_png(png_bytes, "ZunzShot_Share")?;
 
@@ -1786,7 +2146,17 @@ fn share_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
             let Some(mtm) = MainThreadMarker::new() else {
                 return;
             };
-            let Some(ov) = app_handle.get_webview_window("overlay") else {
+            for (_, win) in all_overlay_windows(&app_handle) {
+                if let Ok(ptr) = win.ns_window() {
+                    if !ptr.is_null() {
+                        unsafe { (*(ptr as *const NSWindow)).setLevel(0) };
+                    }
+                }
+            }
+            let Some(ov) = app_handle
+                .get_webview_window(&overlay_window_label(screen_index))
+                .or_else(|| app_handle.get_webview_window("overlay"))
+            else {
                 return;
             };
             let Ok(ns_win_ptr) = ov.ns_window() else {
@@ -1847,7 +2217,7 @@ fn share_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let _ = (app, temp_path, anchor_x, anchor_y, anchor_w, anchor_h);
+        let _ = (app, temp_path, anchor_x, anchor_y, anchor_w, anchor_h, screen_index);
     }
 
     Ok(())
@@ -1878,13 +2248,17 @@ fn print_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
                 let _ = app_handle.emit("zunzshot://print-result", false);
                 return;
             };
-            let ns_win_opt = app_handle
-                .get_webview_window("overlay")
-                .and_then(|ov| ov.ns_window().ok())
-                .filter(|p| !p.is_null())
-                .map(|p| unsafe { &*(p as *const NSWindow) });
+            let ns_wins: Vec<&NSWindow> = all_overlay_windows(&app_handle)
+                .into_iter()
+                .filter_map(|(_, ov)| {
+                    ov.ns_window()
+                        .ok()
+                        .filter(|p| !p.is_null())
+                        .map(|p| unsafe { &*(p as *const NSWindow) })
+                })
+                .collect();
 
-            if let Some(ns_win) = ns_win_opt {
+            for ns_win in &ns_wins {
                 // Lower overlay below system Print Panel
                 ns_win.setLevel(0);
             }
@@ -1919,9 +2293,11 @@ fn print_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
             let _ = fs::remove_file(&path_for_print);
 
             if !printed {
-                if let Some(ns_win) = ns_win_opt {
+                for ns_win in &ns_wins {
                     ns_win.setLevel(1000);
-                    ns_win.makeKeyAndOrderFront(None);
+                }
+                if let Some(first) = ns_wins.first() {
+                    first.makeKeyAndOrderFront(None);
                 }
             }
             let _ = app_handle.emit("zunzshot://print-result", printed);
@@ -2008,32 +2384,40 @@ fn pin_capture(
     let sel_h = parse_f64("x-pin-h", 200.0).max(48.0);
 
     let pin_id = format!("pin-{}", NEXT_PIN_ID.fetch_add(1, Ordering::Relaxed));
-    let (lang, mon_phys_x, mon_phys_y, mon_w, mon_h, sc) = {
+    let (lang, mon_phys_x, mon_phys_y, virt_lx, virt_ly, mon_w, mon_h, sc) = {
         let mut guard = state.lock().unwrap();
         guard.pinned_images.insert(pin_id.clone(), png_bytes.to_vec());
-        let (mx, my, mw, mh, scale) = match guard.active_session.as_ref() {
+        let (mx, my, vlx, vly, mw, mh, scale) = match guard.active_session.as_ref() {
             Some(s) => (
                 s.monitor_phys_x,
                 s.monitor_phys_y,
+                s.virt_logical_x,
+                s.virt_logical_y,
                 s.metadata.logical_width.max(1.0),
                 s.metadata.logical_height.max(1.0),
                 s.metadata.scale_factor.max(1.0),
             ),
-            None => (0, 0, 1440.0, 900.0, 1.0),
+            None => (0, 0, 0.0, 0.0, 1440.0, 900.0, 1.0),
         };
-        (guard.settings.language.clone(), mx, my, mw, mh, scale)
+        (guard.settings.language.clone(), mx, my, vlx, vly, mw, mh, scale)
     };
 
     let w = sel_w.min(mon_w);
     let h = sel_h.min(mon_h);
     let clamped_x = sel_x.clamp(0.0, (mon_w - w).max(0.0));
     let clamped_y = sel_y.clamp(0.0, (mon_h - h).max(0.0));
+    #[cfg(target_os = "windows")]
     let fallback_x = mon_phys_x as f64 / sc + clamped_x;
+    #[cfg(target_os = "windows")]
     let fallback_y = mon_phys_y as f64 / sc + clamped_y;
+    #[cfg(not(target_os = "windows"))]
+    let fallback_x = virt_lx + clamped_x;
+    #[cfg(not(target_os = "windows"))]
+    let fallback_y = virt_ly + clamped_y;
 
     #[cfg(target_os = "windows")]
     {
-        let _ = (sel_x, sel_y, sel_w, sel_h, mon_w, mon_h);
+        let _ = (sel_x, sel_y, sel_w, sel_h, mon_w, mon_h, virt_lx, virt_ly);
         let app_handle = app.clone();
         let id_for_win = pin_id.clone();
         std::thread::spawn(move || {
@@ -2086,24 +2470,21 @@ fn pin_capture(
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = (mon_phys_x, mon_phys_y, sc, sel_x, sel_y, sel_w, sel_h);
         let app_handle = app.clone();
         let id_for_win = pin_id.clone();
         let _ = app.run_on_main_thread(move || {
-            #[allow(unused_mut)]
-            let mut top_left_x = fallback_x;
-            #[allow(unused_mut)]
-            let mut top_left_y = fallback_y;
-            #[allow(unused_mut)]
-            let mut win_w = w;
-            #[allow(unused_mut)]
-            let mut win_h = h;
+            let top_left_x = fallback_x;
+            let top_left_y = fallback_y;
+            let win_w = w;
+            let win_h = h;
             #[cfg(target_os = "macos")]
             let mut cocoa_frame_opt: Option<objc2_foundation::NSRect> = None;
 
             #[cfg(target_os = "macos")]
             {
                 use objc2::MainThreadMarker;
-                use objc2_app_kit::{NSScreen, NSWindow};
+                use objc2_app_kit::NSScreen;
                 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
                 if let Some(mtm) = MainThreadMarker::new() {
@@ -2113,32 +2494,11 @@ fn pin_capture(
                     } else {
                         mon_h.max(900.0)
                     };
-
-                    if let Some(ov_frame) = app_handle
-                        .get_webview_window("overlay")
-                        .and_then(|ov| ov.ns_window().ok())
-                        .filter(|ptr| !ptr.is_null())
-                        .map(|ptr| unsafe { (*(ptr as *const NSWindow)).frame() })
-                    {
-                        win_w = sel_w.min(ov_frame.size.width.max(64.0));
-                        win_h = sel_h.min(ov_frame.size.height.max(48.0));
-                        let cx = sel_x.clamp(0.0, (ov_frame.size.width - win_w).max(0.0));
-                        let cy = sel_y.clamp(0.0, (ov_frame.size.height - win_h).max(0.0));
-                        let cocoa_x = ov_frame.origin.x + cx;
-                        let cocoa_y = ov_frame.origin.y + ov_frame.size.height - (cy + win_h);
-                        top_left_x = cocoa_x;
-                        top_left_y = primary_h - (cocoa_y + win_h);
-                        cocoa_frame_opt = Some(NSRect::new(
-                            NSPoint::new(cocoa_x, cocoa_y),
-                            NSSize::new(win_w, win_h),
-                        ));
-                    } else {
-                        let cocoa_y = primary_h - (fallback_y + win_h);
-                        cocoa_frame_opt = Some(NSRect::new(
-                            NSPoint::new(fallback_x, cocoa_y),
-                            NSSize::new(win_w, win_h),
-                        ));
-                    }
+                    let cocoa_y = primary_h - (fallback_y + win_h);
+                    cocoa_frame_opt = Some(NSRect::new(
+                        NSPoint::new(fallback_x, cocoa_y),
+                        NSSize::new(win_w, win_h),
+                    ));
                 }
             }
 
@@ -2516,6 +2876,8 @@ pub fn run() {
             start_capture,
             get_capture_metadata,
             get_capture_rgba,
+            get_capture_region_rgba,
+            set_macos_drag_monitor,
             set_overlay_elevated,
             focus_overlay_window,
             close_overlay,
@@ -2665,4 +3027,23 @@ pub fn run() {
             let _ = app_handle;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Shortcut;
+    use std::str::FromStr;
+
+    #[test]
+    fn parses_standalone_and_modified_print_screen_shortcuts() {
+        let single = Shortcut::from_str("PrintScreen").expect("standalone PrintScreen");
+        assert!(single.mods.is_empty());
+
+        let shifted = Shortcut::from_str("Shift+PrintScreen").expect("Shift+PrintScreen");
+        assert!(!shifted.mods.is_empty());
+        assert_ne!(single.id(), shifted.id());
+
+        let ctrled = Shortcut::from_str("Control+PrintScreen").expect("Control+PrintScreen");
+        assert_ne!(shifted.id(), ctrled.id());
+    }
 }

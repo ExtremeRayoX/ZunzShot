@@ -275,7 +275,9 @@ export function drawPhotoSticker(
 
   ctx.save();
   ctx.clip();
-  ctx.drawImage(img, x, y, w, h);
+  if (img && img.complete && img.naturalWidth > 0) {
+    ctx.drawImage(img, x, y, w, h);
+  }
   ctx.restore();
 
   // Subtle white frame on rounded/circle Instagram-style photo sticker
@@ -300,6 +302,8 @@ export interface PixelSource {
   bitmap: ImageBitmap;
   cssW: number;
   cssH: number;
+  offsetX?: number;
+  offsetY?: number;
 }
 
 let pixelScratchCanvas: HTMLCanvasElement | null = null;
@@ -471,21 +475,31 @@ export function drawOverlayItem(
     const rw = Math.max(1, item.w);
     const rh = Math.max(1, item.h);
     if (pixelSource && item.w >= 2 && item.h >= 2) {
-      const scaleX = pixelSource.bitmap.width / Math.max(1, pixelSource.cssW);
-      const scaleY = pixelSource.bitmap.height / Math.max(1, pixelSource.cssH);
-      const sx = Math.max(0, Math.min(pixelSource.bitmap.width - 1, item.x * scaleX));
-      const sy = Math.max(0, Math.min(pixelSource.bitmap.height - 1, item.y * scaleY));
-      const sw = Math.max(1, Math.min(pixelSource.bitmap.width - sx, rw * scaleX));
-      const sh = Math.max(1, Math.min(pixelSource.bitmap.height - sy, rh * scaleY));
-      const cols = Math.max(1, Math.round(rw / Math.max(4, item.blockSize)));
-      const rows = Math.max(1, Math.round(rh / Math.max(4, item.blockSize)));
-      const [scratch, sCtx] = getPixelScratch(cols, rows);
-      if (sCtx) {
-        sCtx.imageSmoothingEnabled = true;
-        sCtx.clearRect(0, 0, cols, rows);
-        sCtx.drawImage(pixelSource.bitmap, sx, sy, sw, sh, 0, 0, cols, rows);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(scratch, 0, 0, cols, rows, item.x, item.y, rw, rh);
+      const ox = pixelSource.offsetX ?? 0;
+      const oy = pixelSource.offsetY ?? 0;
+      const ix0 = Math.max(item.x, ox);
+      const iy0 = Math.max(item.y, oy);
+      const ix1 = Math.min(item.x + rw, ox + pixelSource.cssW);
+      const iy1 = Math.min(item.y + rh, oy + pixelSource.cssH);
+      const iw = ix1 - ix0;
+      const ih = iy1 - iy0;
+      if (iw >= 1 && ih >= 1) {
+        const scaleX = pixelSource.bitmap.width / Math.max(1, pixelSource.cssW);
+        const scaleY = pixelSource.bitmap.height / Math.max(1, pixelSource.cssH);
+        const sx = Math.max(0, Math.min(pixelSource.bitmap.width - 1, (ix0 - ox) * scaleX));
+        const sy = Math.max(0, Math.min(pixelSource.bitmap.height - 1, (iy0 - oy) * scaleY));
+        const sw = Math.max(1, Math.min(pixelSource.bitmap.width - sx, iw * scaleX));
+        const sh = Math.max(1, Math.min(pixelSource.bitmap.height - sy, ih * scaleY));
+        const cols = Math.max(1, Math.round(iw / Math.max(4, item.blockSize)));
+        const rows = Math.max(1, Math.round(ih / Math.max(4, item.blockSize)));
+        const [scratch, sCtx] = getPixelScratch(cols, rows);
+        if (sCtx) {
+          sCtx.imageSmoothingEnabled = true;
+          sCtx.clearRect(0, 0, cols, rows);
+          sCtx.drawImage(pixelSource.bitmap, sx, sy, sw, sh, 0, 0, cols, rows);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(scratch, 0, 0, cols, rows, ix0, iy0, iw, ih);
+        }
       }
     }
     if (selected) {
@@ -659,13 +673,15 @@ export async function renderExportPngBytes(
   selection: SelectionBox,
   items: OverlayItem[],
   capturedAtIso: string,
-  lang: Language
+  lang: Language,
+  bitmapOriginX = 0,
+  bitmapOriginY = 0
 ): Promise<Uint8Array> {
   const scaleX = baseBitmap.width / cssW;
   const scaleY = baseBitmap.height / cssH;
 
-  const outX = Math.round(selection.x * scaleX);
-  const outY = Math.round(selection.y * scaleY);
+  const outX = Math.max(0, Math.round((selection.x - bitmapOriginX) * scaleX));
+  const outY = Math.max(0, Math.round((selection.y - bitmapOriginY) * scaleY));
   const outW = Math.max(1, Math.round(selection.w * scaleX));
   const outH = Math.max(1, Math.round(selection.h * scaleY));
 
@@ -683,11 +699,21 @@ export async function renderExportPngBytes(
     ctx.clip();
   }
 
-  // Draw crisp physical pixels from the captured monitor
-  ctx.drawImage(baseBitmap, outX, outY, outW, outH, 0, 0, outW, outH);
+  // Draw crisp physical pixels from the captured monitor (or stitched composite region)
+  ctx.drawImage(
+    baseBitmap,
+    outX,
+    outY,
+    Math.min(outW, Math.max(1, baseBitmap.width - outX)),
+    Math.min(outH, Math.max(1, baseBitmap.height - outY)),
+    0,
+    0,
+    outW,
+    outH
+  );
 
-  // Transform logical overlay coordinates into cropped physical pixel space
-  ctx.translate(-outX, -outY);
+  // Transform virtual logical overlay coordinates into cropped physical pixel space
+  ctx.translate(-(outX + bitmapOriginX * scaleX), -(outY + bitmapOriginY * scaleY));
   ctx.scale(scaleX, scaleY);
 
   for (const item of items) {
@@ -695,6 +721,8 @@ export async function renderExportPngBytes(
       bitmap: baseBitmap,
       cssW,
       cssH,
+      offsetX: bitmapOriginX,
+      offsetY: bitmapOriginY,
     });
   }
   ctx.restore();

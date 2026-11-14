@@ -60,8 +60,9 @@ jobs:
             - **Windows (Instalador oficial):** `ZunzShot___VERSION___x64-setup.exe`
 
             ### Novedades incluidas
-            - **Captura continua en múltiples pantallas (Windows):** Al capturar se atenúan todas tus pantallas al mismo tiempo para seleccionar dentro de cualquiera de ellas o cruzar entre varios monitores.
-            - **Controles centrados en el monitor activo (Windows):** Las barras y avisos aparecen en la pantalla donde está tu cursor sin cortarse entre bordes.
+            - **Captura continua en múltiples pantallas (macOS y Windows):** Al capturar se atenúan todas tus pantallas al mismo tiempo para seleccionar dentro de cualquiera de ellas o cruzar entre varios monitores sin importar su resolución o ubicación.
+            - **Controles centrados en el monitor activo (macOS y Windows):** Las barras y avisos aparecen en la pantalla donde trabajas sin cortarse entre bordes.
+            - **Atajo directo con `PrtSc` (Windows):** Ahora puedes asignar `Impr Pant` (`PrtSc`) por sí sola o combinada *(por ejemplo `Shift + PrtSc`)* como atajo global de captura.
             - **Ícono oficial en el instalador de Windows:** El instalador y desinstalador ahora muestran el logotipo de ZunzShot.
           releaseDraft: true
           prerelease: false

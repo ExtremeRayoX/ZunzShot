@@ -57,6 +57,19 @@ export interface MonitorRect {
   rh: number;
 }
 
+export interface CapturedScreenInfo {
+  index: number;
+  displayId: number;
+  lx: number;
+  ly: number;
+  lw: number;
+  lh: number;
+  pixelW: number;
+  pixelH: number;
+  scaleFactor: number;
+  isPrimary: boolean;
+}
+
 export interface CaptureMetadata {
   mode: CaptureMode;
   capturedAtIso: string;
@@ -67,6 +80,8 @@ export interface CaptureMetadata {
   logicalHeight: number;
   scaleFactor: number;
   activeMonitor?: MonitorRect;
+  activeScreenIndex?: number;
+  screens?: CapturedScreenInfo[];
   windows: WindowCandidate[];
 }
 
@@ -185,7 +200,8 @@ export interface PhotoSticker {
   w: number;
   h: number;
   shape: PhotoMaskShape;
-  img: HTMLImageElement;
+  img?: HTMLImageElement;
+  imgSrc?: string;
 }
 
 export interface ClockSticker {
