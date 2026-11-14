@@ -50,6 +50,13 @@ export interface WindowCandidate {
   rh: number;
 }
 
+export interface MonitorRect {
+  rx: number;
+  ry: number;
+  rw: number;
+  rh: number;
+}
+
 export interface CaptureMetadata {
   mode: CaptureMode;
   capturedAtIso: string;
@@ -59,6 +66,7 @@ export interface CaptureMetadata {
   logicalWidth: number;
   logicalHeight: number;
   scaleFactor: number;
+  activeMonitor?: MonitorRect;
   windows: WindowCandidate[];
 }
 

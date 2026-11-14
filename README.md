@@ -10,28 +10,28 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v107)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v107)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v108)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v108)
 [![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.7 para Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.0.8 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.7 para macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.0.8 para macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas (`v1.0.7`)
+## Descargas (`v1.0.8`)
 
-Versión actual disponible: **ZunzShot v1.0.7**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.0.8**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa (`v1.0.7`) | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.0.8`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.7 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.7 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.0.8 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.0.8 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -113,48 +113,52 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 
 ## Notas de Versión
 
+### `v1.0.8`
+- **Captura continua en múltiples pantallas (Windows):** Al iniciar una captura se atenúan todas las pantallas conectadas al mismo tiempo, permitiéndote capturar un solo monitor o arrastrar una selección a través de varios monitores.
+- **Barras y avisos en la pantalla activa (Windows):** La barra de modos y las notificaciones se posicionan automáticamente en el monitor donde está tu cursor sin cortarse entre bordes.
+- **Ícono oficial en el instalador de Windows:** El instalador y desinstalador de Windows ahora muestran el logotipo de ZunzShot.
+
 ### `v1.0.7`
-- **Estabilidad integral en Windows tras capturas y comandos:** Creación y gestión asíncrona de ventanas WebView2 en hilos secundarios para eliminar congelamientos al abrir el selector, notificaciones de copiado, capturas fijadas (`Pin`) o la ventana de Ajustes.
-- **Detección de ventanas sin bloqueos en Windows:** Reemplazo del escaneo bloqueante por enumeración nativa Win32/DWM con descarte inmediato de ventanas del sistema que no responden (`IsHungAppWindow`) y lectura de títulos sin bloqueo, manteniendo intacto el flujo de macOS.
-- **Diálogos nativos y cierre limpio desde la barra de tareas:** Ocultación temporal del selector en Windows al abrir diálogos de *Guardar*, *Imprimir* o *Compartir* para evitar que queden detrás del lienzo, impresión directa sin procesos huérfanos y cierre inmediato desde la barra de tareas o el menú de bandeja.
+- **Mayor fluidez y estabilidad en Windows:** Se corrigieron congelamientos al realizar capturas, usar atajos o abrir Ajustes y notas fijadas (`Pin`).
+- **Detección de ventanas más rápida:** El modo *Ventana* responde al instante sin trabarse cuando hay aplicaciones ocupadas.
+- **Diálogos siempre visibles y cierre inmediato:** Las ventanas de *Guardar*, *Imprimir* y *Compartir* se muestran siempre por delante, y puedes cerrar la aplicación al instante desde la barra de tareas o la bandeja.
 
 ### `v1.0.6`
-- **Texto enriquecido editable y configurable:** Los textos añadidos sobre la captura ahora pueden seleccionarse, moverse, ajustarse con flechas del teclado, volver a editarse con **doble clic** y personalizarse en vivo (mientras escribes o al seleccionarlos) con alternador **Con fondo / Sin fondo**, **negrita (`B`)**, **cursiva (`I`)**, tamaño (`A-` / `A+`) y paleta de color sin impacto en el peso de la app.
-- **Valores iniciales para texto en Ajustes → Extras:** Nueva vista **Texto y Etiquetas** dentro de **Extras** con vista previa en vivo para definir si los nuevos textos arrancan con fondo, negrita, cursiva y tamaño inicial predeterminado.
-- **Instalador único para Windows:** Retirada la compilación *offline* de Windows para mantener el proyecto ligero y acelerar compilaciones y entregas.
+- **Texto editable y personalizable:** Los textos sobre la captura ahora pueden moverse, ajustarse con las flechas, editarse con **doble clic** y personalizarse al instante con **fondo**, **negrita (`B`)**, **cursiva (`I`)**, tamaño y color.
+- **Estilos predeterminados de texto:** Nueva sección **Texto y Etiquetas** en **Ajustes → Extras** con vista previa para definir el formato inicial de tus textos.
+- **Instalador único para Windows:** Descargas simplificadas a un único instalador oficial para Windows.
 
 ### `v1.0.5`
-- **Sensor ligero de actualizaciones en segundo plano:** Detección periódica de nuevas versiones mientras la aplicación permanece abierta sin impacto en CPU ni memoria, con aviso interactivo para **Actualizar ahora** o **Recordar más tarde**.
-- **Nuevo menú de Extras en Ajustes:** Reorganización de las herramientas creativas en una sección dedicada **Extras**, integrando dentro de ella la configuración del **Sticker de Hora y Fecha**.
-- **Guardado contextual por sección:** El botón **Guardar cambios** (junto con la opción **Descartar**) ahora se muestra dentro de cada menú (`General`, `Atajos` y `Sticker de Hora`) únicamente cuando se detectan modificaciones sin guardar.
+- **Aviso de nuevas versiones:** ZunzShot detecta actualizaciones disponibles en segundo plano y te permite **Actualizar ahora** o **Recordar más tarde**.
+- **Nueva sección Extras en Ajustes:** Reorganización de las herramientas creativas en un menú dedicado que incluye la configuración del **Sticker de Hora y Fecha**.
+- **Guardado por sección en Ajustes:** Los botones de **Guardar** y **Descartar** aparecen únicamente cuando realizas cambios en una sección.
 
 ### `v1.0.4`
-- **Instancia única y bandeja del sistema en Windows:** Prevención de procesos e íconos duplicados al abrir la aplicación cuando ya está en ejecución y corrección de respuesta al clic en la bandeja del sistema.
-- **Atajos globales y foco reforzados:** Detección de atajos reservados por el sistema operativo con aviso en ajustes, respaldo seguro al grabar combinaciones y refuerzo de foco del lienzo en Windows.
-- **Precisión multi-monitor y DPI mixto:** Posicionamiento y escalado exacto de notificaciones de copiado y capturas fijadas (`Pin`) entre monitores con distintas resoluciones o escalas, sin parpadeos iniciales.
-- **Estabilidad en Compartir, Imprimir y Guardado:** Ajuste automático del nivel de ventana para no cubrir diálogos del sistema en Windows y macOS, limpieza automática de archivos temporales y avisos claros ante cualquier error.
+- **Ventana única y bandeja mejorada en Windows:** Evita abrir múltiples copias de la app por error y mejora la respuesta del ícono en la bandeja del sistema.
+- **Atajos globales más confiables:** Aviso automático si el sistema reserva una combinación de teclas y mejor respuesta al iniciar capturas en Windows.
+- **Ajuste exacto en configuraciones con varios monitores:** Avisos de copiado y capturas fijadas (`Pin`) con posición y tamaño precisos en pantallas de distinta resolución.
+- **Compartir, Imprimir y Guardar más estables:** Ventanas del sistema siempre accesibles y avisos claros ante cualquier error.
 
 ### `v1.0.3`
-- **Arreglo de atajos y foco en Windows:** Corrección de errores de foco de ventana y activación que impedían usar los atajos globales (`Ctrl+Shift+D/X/C/W/F`) y los comandos internos (`Esc`, `Ctrl+C`, `Ctrl+S`, `Ctrl+Shift+P`, `Ctrl+Shift+E`, `Ctrl+P`, deshacer/rehacer y flechas) en Windows.
-- **Eliminación de rastro de trazos previos:** Limpieza sincronizada del lienzo, selecciones y objetos temporales entre capturas para evitar destellos momentáneos de anotaciones anteriores al iniciar una nueva captura.
-- **Limpieza automática de memoria:** Liberación inmediata de caché gráfica e imágenes superpuestas tras cerrar o completar una captura, y cambio directo de modo con el selector abierto.
-- **Descarga directa desde portada:** Botones visuales independientes para Windows y macOS con descarga directa al instante sin pasar por páginas intermedias.
+- **Atajos corregidos en Windows:** Ya responden correctamente tanto los atajos globales de captura como los comandos dentro del editor.
+- **Lienzo limpio entre capturas:** Eliminados los rastros visuales de anotaciones anteriores al iniciar una nueva captura y posibilidad de cambiar de modo sin cerrarla.
+- **Descarga directa desde la portada:** Nuevos botones para descargar Windows y macOS en un clic.
 
 ### `v1.0.2`
-- **Permisos simplificados en macOS:** Flujo de permisos iniciales depurado con un único botón directo y detección automática al conceder el permiso.
-- **Estabilidad de copiado rápido:** Mejoras en el cierre del selector y reintentos del portapapeles tras copiar una selección directa.
-- **Guía visual renovada:** Incorporación de los íconos oficiales de cada herramienta y documentación completa de funciones.
+- **Permisos simplificados en macOS:** Acceso inicial simplificado con un solo botón y detección automática al conceder el permiso.
+- **Copiado rápido más confiable:** Mejoras al cerrar el selector y copiar selecciones directas al portapapeles.
+- **Guía visual renovada:** Nuevos íconos para cada herramienta y documentación completa de funciones.
 
 ### `v1.0.1`
-- **Dos opciones de instalador para Windows:** Incorporación de la edición **Ligera** (descarga rápida) junto a la edición **Offline completa** para instalaciones sin conexión.
-- **Actualizaciones automáticas multiplataforma:** Integración del canal de publicación y actualización automática unificado para Windows y macOS.
-- **Ajustes visuales y de configuración:** Mejoras menores en los textos de interfaz, sección *Acerca de* y flujo inicial de configuración.
+- **Nuevas opciones de instalación en Windows:** Incorporación del instalador ligero junto a la edición completa para usar sin conexión.
+- **Actualizaciones automáticas:** Sistema integrado de avisos y actualización directa para Windows y macOS.
+- **Ajustes visuales y de texto:** Pequeñas mejoras en textos, sección *Acerca de* y bienvenida inicial.
 
 ### `v1.0.0`
-- **Lanzamiento inicial multiplataforma:** Primera versión pública para macOS y Windows concebida como una herramienta ágil en segundo plano de consumo mínimo.
-- **Cinco modos de captura:** Región libre, Copiado rápido sin edición intermedia, Recorte circular transparente, Detección de ventanas y Pantalla completa.
-- **Editor completo integrado:** Barra en L adaptable con trazos, flechas, formas, texto, pixelado, cuentagotas con lupa de píxeles, pasos numerados, imágenes superpuestas, sello de fecha/hora y fijado en pantalla.
-- **Personalización y bilingüismo:** Soporte completo en **Español** e **Inglés**, atajos configurables, inicio automático opcional y **Modo Ultra Liviano**.
+- **Lanzamiento inicial para macOS y Windows:** Herramienta ligera de captura de pantalla pensada para responder al instante en segundo plano.
+- **Cinco modos de captura:** Región libre, Copiado rápido, Recorte circular transparente, Detección de ventanas y Pantalla completa.
+- **Editor creativo integrado:** Trazos, flechas, formas, texto, pixelado, selector de color con lupa, pasos numerados, imágenes superpuestas, sello de fecha/hora y notas fijadas en pantalla.
+- **Personalizable y bilingüe:** Disponible en **Español** e **Inglés**, con atajos configurables, inicio automático y **Modo Ultra Liviano**.
 
 ---
 

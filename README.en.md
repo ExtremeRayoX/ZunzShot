@@ -10,28 +10,28 @@
 
 **Instant, ultra-lightweight, and creative screenshot tool for macOS and Windows.**
 
-[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v107)
-[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v107)
+[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v108)
+[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v108)
 [![Spanish README](https://img.shields.io/badge/Language-English_%7C_Espa%C3%B1ol-6366f1?style=for-the-badge)](README.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.7 for Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.8 for Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.7 for macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.8 for macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Downloads (`v1.0.7`)
+## Downloads (`v1.0.8`)
 
-Latest available version: **ZunzShot v1.0.7**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
+Latest available version: **ZunzShot v1.0.8**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
 
-| OS | Platform | Direct Download (`v1.0.7`) | Details |
+| OS | Platform | Direct Download (`v1.0.8`) | Details |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.7 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.7 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.7/ZunzShot_1.0.7_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.8 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.8 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.8/ZunzShot_1.0.8_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
 
 > **macOS note:** If Gatekeeper shows an unverified developer prompt on first launch, **right-click → Open** on the app in Applications or run in Terminal:
 > ```bash
@@ -113,48 +113,52 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 
 ## Release Notes
 
+### `v1.0.8`
+- **Continuous multi-monitor capture (Windows):** Starting a capture now dims all connected displays at once, letting you select within any screen or drag one capture seamlessly across multiple monitors.
+- **Controls on the active monitor (Windows):** The mode bar and in-capture notices automatically center on the display where your cursor is, avoiding splits across screen edges.
+- **Official Windows installer icon:** The Windows installer and uninstaller now display the ZunzShot logo cleanly.
+
 ### `v1.0.7`
-- **Comprehensive Windows stability after captures and commands:** Offloaded WebView2 window creation and teardown to background threads to eliminate UI freezes when opening the overlay, copy toasts, pinned (`Pin`) captures, or Settings.
-- **Non-blocking window detection on Windows:** Replaced blocking window enumeration with a direct Win32/DWM enumeration pipeline that skips unresponsive windows (`IsHungAppWindow`) and reads window titles without cross-process deadlocks, while keeping macOS untouched.
-- **Native dialogs & clean taskbar/tray exit on Windows:** Automatically hides the fullscreen overlay while native *Save*, *Print*, or *Share* dialogs are open so they are never covered, streamlines silent printing, and ensures clean window closing and immediate process exit from the taskbar or system tray.
+- **Smoother and more reliable on Windows:** Fixed freezes and stalls after capturing screenshots, using shortcuts, or opening Settings and pinned captures.
+- **Faster window detection:** *Window* mode responds immediately even when background apps are busy.
+- **Always-visible dialogs & instant exit:** *Save*, *Print*, and *Share* dialogs always appear in front, and closing from the taskbar or system tray quits immediately.
 
 ### `v1.0.6`
-- **Editable rich text annotations:** Placed text labels can now be selected, moved, arrow-nudged, re-edited via **double-click**, and styled live (while typing or selected) with a **background toggle** (*With bg* / *No bg*), **bold (`B`)**, **italic (`I`)**, font size (`A-` / `A+`), and quick color controls without adding overhead.
-- **Default text presets in Settings → Extras:** Added a **Text & Labels** subview inside **Extras** with live preview to configure whether new text labels start with background, bold, italic, and default font size.
-- **Streamlined Windows installer:** Retired the standalone Windows *offline* installer build to keep the repository tidy and speed up builds and releases.
+- **Editable & styled text annotations:** Added text can now be moved, nudged with arrow keys, re-edited with a **double-click**, and styled live with **background toggle**, **bold (`B`)**, **italic (`I`)**, size, and color.
+- **Default text presets:** Added a **Text & Labels** section under **Settings → Extras** with a live preview to set your default text appearance.
+- **Single Windows installer:** Streamlined Windows downloads into one official installer.
 
 ### `v1.0.5`
-- **Lightweight background update sensor:** Periodic detection of newly published versions while the app stays open in the tray with zero idle CPU overhead, featuring an interactive prompt to **Update now** or **Remind me later**.
-- **Dedicated Extras menu in Settings:** Reorganized creative tools into the **Extras** hub, nesting **Date & Time Sticker** configuration cleanly inside it.
-- **Contextual per-section Save bar:** Moved **Save Changes** (with **Discard**) inside each settings menu (`General`, `Shortcuts`, and `Clock Sticker`), appearing only when unsaved changes are made.
+- **Background update alerts:** ZunzShot checks for new releases automatically and lets you **Update now** or **Remind me later**.
+- **New Extras hub in Settings:** Grouped creative customization tools into **Extras**, including **Date & Time Sticker** settings.
+- **Per-section Save bar:** **Save** and **Discard** buttons now appear only when you make unsaved changes in a section.
 
 ### `v1.0.4`
-- **Single-instance guard & Windows tray fix:** Prevent duplicate processes and tray icons when launching the app while already running, and fix tray click menu behavior on Windows.
-- **Hardened global shortcuts & focus:** Detect OS-reserved shortcut conflicts with warnings in Settings, safe rollback while recording hotkeys, and reinforced overlay focus on Windows.
-- **Multi-monitor & mixed-DPI precision:** Exact positioning and scaling for copy toast notifications and pinned (`Pin`) windows across displays with different DPI scales, without initial 1-frame flashes.
-- **Share, Print & Save reliability:** Automatic overlay level lowering so system dialogs stay visible on Windows and macOS, automatic temp-file cleanup, and clear error feedback across all tabs.
+- **Single-instance & tray fix on Windows:** Prevents opening duplicate app instances by mistake and improves system tray menu responsiveness.
+- **More reliable shortcuts:** Warns when a key combination is reserved by the OS and improves capture launch reliability on Windows.
+- **Multi-display layout accuracy:** Copy notifications and pinned captures (`Pin`) appear at the right size and position across screens with different resolutions.
+- **More reliable Share, Print & Save:** System dialogs stay accessible and clear messages are shown if an action fails.
 
 ### `v1.0.3`
-- **Windows shortcuts & focus fix:** Fixed window focus and activation issues that prevented global hotkeys (`Ctrl+Shift+D/X/C/W/F`) and overlay shortcuts (`Esc`, `Ctrl+C`, `Ctrl+S`, `Ctrl+Shift+P`, `Ctrl+Shift+E`, `Ctrl+P`, undo/redo, arrow keys) from working on Windows.
-- **Clean canvas transitions:** Synchronized canvas, selection, and temporary item resets between captures to eliminate brief flashes of previous drawings when starting a new capture.
-- **Automatic memory cleanup:** Immediate release of graphics caches and image overlays when closing or finishing a capture, plus direct capture mode switching while the overlay is open.
-- **Direct homepage downloads:** Dedicated visual download buttons for Windows and macOS without going through Releases pages.
+- **Windows shortcuts fixed:** Global capture hotkeys and in-editor keyboard actions now work reliably on Windows.
+- **Clean canvas between captures:** Removed brief leftover flashes from previous edits when starting a new capture, and enabled switching capture modes without closing.
+- **One-click homepage downloads:** Added direct download buttons for Windows and macOS right in the README.
 
 ### `v1.0.2`
-- **Simplified macOS permissions:** Streamlined initial Screen Recording onboarding with a single direct button and automatic detection once granted.
-- **Quick Copy stability:** Improved overlay teardown and clipboard write retries after quick selection copies.
-- **Refreshed visual guide:** Added matching tool icons and complete feature documentation.
+- **Simpler macOS permissions:** Streamlined Screen Recording onboarding with one button and automatic detection once granted.
+- **More reliable Quick Copy:** Improved selector dismissal and clipboard reliability after quick selection copies.
+- **Refreshed visual guide:** Added matching tool icons and full feature documentation.
 
 ### `v1.0.1`
-- **Dual Windows installers:** Added the **Lightweight** online installer alongside a **Full Offline** installer for environments without internet access.
-- **Cross-platform auto-updater:** Unified release publishing and built-in automatic update channel for Windows and macOS.
-- **UI & onboarding polish:** Refined interface copy, *About* section, and initial setup flow.
+- **More Windows installer options:** Added the lightweight installer alongside a full offline installer for environments without internet access.
+- **Built-in updates:** Integrated update notifications and direct updates for Windows and macOS.
+- **Visual & copy polish:** Minor refinements to interface text, the *About* section, and onboarding.
 
 ### `v1.0.0`
-- **Initial cross-platform release:** First public release for macOS and Windows designed as a fast, minimal-footprint background utility.
+- **Initial release for macOS & Windows:** Fast, lightweight background screenshot utility built for instant capture.
 - **Five capture modes:** Free Region, Quick Copy, transparent Circle Crop, Window detection, and Fullscreen.
-- **Built-in creative editor:** Adaptive L-shaped toolbar with freehand strokes, arrows, shapes, text, pixelate redaction, `#HEX` pixel eyedropper, numbered steps, photo overlays, date/time stickers, and floating screen pins.
-- **Bilingual & customizable:** Full **English** and **Spanish** support, customizable hotkeys, optional launch on startup, and **Ultra-Light Mode**.
+- **Built-in creative editor:** Freehand strokes, arrows, shapes, text, pixelate blur, color picker with pixel loupe, numbered steps, photo overlays, date/time stickers, and floating screen pins.
+- **Bilingual & customizable:** Full **English** and **Spanish** support, custom shortcuts, optional launch on startup, and **Ultra-Light Mode**.
 
 ---
 

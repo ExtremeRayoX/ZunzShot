@@ -2364,6 +2364,14 @@ export const OverlayApp: React.FC = () => {
     return `${formatted.timeText} · ${formatted.dateText ?? ""}`;
   }, [metadata, selectedSticker, settings, lang]);
 
+  const activeMonitorStyle = useMemo(() => {
+    const m = metadata?.activeMonitor ?? { rx: 0, ry: 0, rw: 1, rh: 1 };
+    const centerX = (m.rx + m.rw / 2) * viewport.w;
+    const monTop = m.ry * viewport.h;
+    const monBottom = (m.ry + m.rh) * viewport.h;
+    return { centerX, monTop, monBottom };
+  }, [metadata?.activeMonitor, viewport.w, viewport.h]);
+
   // Measure clock sticker warning silence
   void measureClockSticker;
 
@@ -2418,7 +2426,13 @@ export const OverlayApp: React.FC = () => {
 
       {/* Top instruction & quick mode pill when selecting */}
       {!selection && (
-        <div className="top-mode-bar">
+        <div
+          className="top-mode-bar"
+          style={{
+            left: activeMonitorStyle.centerX,
+            top: activeMonitorStyle.monTop + 16,
+          }}
+        >
           <div className="mode-pills">
             <button
               className={`mode-pill ${captureMode === "region" ? "active" : ""}`}
@@ -2482,7 +2496,13 @@ export const OverlayApp: React.FC = () => {
       )}
 
       {selection && captureMode === "quickCopy" && (
-        <div className="top-mode-bar">
+        <div
+          className="top-mode-bar"
+          style={{
+            left: activeMonitorStyle.centerX,
+            top: activeMonitorStyle.monTop + 16,
+          }}
+        >
           <div className="mode-pills">
             <button
               className="mode-pill cancel"
@@ -3403,7 +3423,15 @@ export const OverlayApp: React.FC = () => {
 
       {/* Action Confirmation / Validation Error Toast */}
       {toast && (
-        <div className={`overlay-toast ${toast.error ? "error" : ""}`}>
+        <div
+          className={`overlay-toast ${toast.error ? "error" : ""}`}
+          style={{
+            left: activeMonitorStyle.centerX,
+            top: activeMonitorStyle.monBottom - 28,
+            bottom: "auto",
+            transform: "translate(-50%, -100%)",
+          }}
+        >
           {toast.error ? <AlertTriangle size={16} /> : <Check size={16} />}{" "}
           {toast.msg}
         </div>

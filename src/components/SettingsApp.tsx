@@ -90,7 +90,7 @@ export const SettingsApp: React.FC = () => {
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.0.7");
+  const [appVersion, setAppVersion] = useState<string>("1.0.8");
   const [tab, setTab] = useState<TabId>("capture");
   const [extrasSubView, setExtrasSubView] = useState<"list" | "clock" | "text">("list");
   const [showUpdatePromptModal, setShowUpdatePromptModal] = useState<boolean>(false);

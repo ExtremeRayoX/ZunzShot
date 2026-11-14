@@ -18,6 +18,15 @@ pub struct WindowCandidate {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MonitorNormalizedRect {
+    pub rx: f64,
+    pub ry: f64,
+    pub rw: f64,
+    pub rh: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CaptureMetadata {
     pub mode: String,
     pub captured_at_iso: String,
@@ -27,6 +36,7 @@ pub struct CaptureMetadata {
     pub logical_width: f64,
     pub logical_height: f64,
     pub scale_factor: f64,
+    pub active_monitor: Option<MonitorNormalizedRect>,
     pub windows: Vec<WindowCandidate>,
 }
 
@@ -37,11 +47,200 @@ pub struct CaptureSession {
     pub monitor_phys_y: i32,
     pub monitor_phys_w: u32,
     pub monitor_phys_h: u32,
+    pub toast_phys_x: i32,
+    pub toast_phys_y: i32,
+    pub toast_phys_w: u32,
+    pub toast_phys_h: u32,
+    pub toast_scale: f64,
 }
 
-/// Captures the monitor where the mouse cursor currently resides,
-/// freezes the exact timestamp, and collects visible application windows.
+/// Captures the active capture surface:
+/// - On Windows: captures and stitches all displays into a continuous virtual desktop
+///   while recording which display contains the cursor for UI placement.
+/// - On macOS: preserves single-display capture under the cursor.
 pub fn capture_active_monitor(app: &AppHandle, mode: &str) -> Result<CaptureSession, String> {
+    #[cfg(target_os = "windows")]
+    {
+        capture_all_monitors_windows(app, mode)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        capture_single_monitor_macos(app, mode)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn capture_all_monitors_windows(app: &AppHandle, mode: &str) -> Result<CaptureSession, String> {
+    // Freeze the exact capture moment BEFORE grabbing pixels
+    let now = Local::now();
+    let captured_at_iso = now.to_rfc3339();
+    let captured_at_ms = now.timestamp_millis();
+
+    let cursor = app.cursor_position().ok();
+    let xcap_monitors = Monitor::all().map_err(|e| format!("Monitor enumeration failed: {e}"))?;
+    if xcap_monitors.is_empty() {
+        return Err("No capture monitors available".to_string());
+    }
+
+    struct CapturedSlice {
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        scale: f64,
+        is_primary: bool,
+        rgba: Vec<u8>,
+    }
+
+    let mut slices: Vec<CapturedSlice> = Vec::with_capacity(xcap_monitors.len());
+    let mut last_err = String::from("No readable display output");
+
+    for mon in xcap_monitors {
+        let mx = mon.x().unwrap_or(0);
+        let my = mon.y().unwrap_or(0);
+        let is_primary = mon.is_primary().unwrap_or(false);
+        let scale = f64::from(mon.scale_factor().unwrap_or(1.0)).max(1.0);
+        match mon.capture_image() {
+            Ok(img) => {
+                let w = img.width();
+                let h = img.height();
+                if w > 0 && h > 0 {
+                    slices.push(CapturedSlice {
+                        x: mx,
+                        y: my,
+                        w,
+                        h,
+                        scale,
+                        is_primary,
+                        rgba: img.into_raw(),
+                    });
+                }
+            }
+            Err(err) => {
+                last_err = err.to_string();
+            }
+        }
+    }
+
+    if slices.is_empty() {
+        return Err(format!("Screen capture failed: {last_err}"));
+    }
+
+    let virt_x = slices.iter().map(|s| s.x).min().unwrap_or(0);
+    let virt_y = slices.iter().map(|s| s.y).min().unwrap_or(0);
+    let virt_right = slices.iter().map(|s| s.x + s.w as i32).max().unwrap_or(1);
+    let virt_bottom = slices.iter().map(|s| s.y + s.h as i32).max().unwrap_or(1);
+    let virt_w = (virt_right - virt_x).max(1) as u32;
+    let virt_h = (virt_bottom - virt_y).max(1) as u32;
+
+    let active_idx = cursor
+        .and_then(|pos| {
+            slices.iter().position(|s| {
+                pos.x >= s.x as f64
+                    && pos.x < (s.x as f64 + s.w as f64)
+                    && pos.y >= s.y as f64
+                    && pos.y < (s.y as f64 + s.h as f64)
+            })
+        })
+        .or_else(|| slices.iter().position(|s| s.is_primary))
+        .unwrap_or(0);
+
+    let active_mon = &slices[active_idx];
+    let active_monitor = Some(MonitorNormalizedRect {
+        rx: (active_mon.x - virt_x) as f64 / virt_w as f64,
+        ry: (active_mon.y - virt_y) as f64 / virt_h as f64,
+        rw: active_mon.w as f64 / virt_w as f64,
+        rh: active_mon.h as f64 / virt_h as f64,
+    });
+    let toast_phys_x = active_mon.x;
+    let toast_phys_y = active_mon.y;
+    let toast_phys_w = active_mon.w;
+    let toast_phys_h = active_mon.h;
+    let toast_scale = active_mon.scale;
+
+    let init_scale = slices
+        .iter()
+        .find(|s| s.is_primary)
+        .map(|s| s.scale)
+        .unwrap_or(active_mon.scale)
+        .max(1.0);
+    let logical_w = virt_w as f64 / init_scale;
+    let logical_h = virt_h as f64 / init_scale;
+
+    let rgba_bytes = if slices.len() == 1
+        && slices[0].x == virt_x
+        && slices[0].y == virt_y
+        && slices[0].w == virt_w
+        && slices[0].h == virt_h
+    {
+        slices.into_iter().next().unwrap().rgba
+    } else {
+        let covered_area: u64 = slices.iter().map(|s| u64::from(s.w) * u64::from(s.h)).sum();
+        let virt_area = u64::from(virt_w) * u64::from(virt_h);
+        let total_pixels = (virt_w as usize).saturating_mul(virt_h as usize);
+        let mut canvas = if covered_area < virt_area {
+            // Fill dead corners of asymmetrical monitor layouts with opaque dark slate
+            // so transparent overlay windows never let pointer hits fall through.
+            [6u8, 10, 20, 255].repeat(total_pixels)
+        } else {
+            vec![0u8; total_pixels.saturating_mul(4)]
+        };
+        let virt_stride = (virt_w as usize) * 4;
+        for slice in slices {
+            let dst_x = (slice.x - virt_x).max(0) as usize;
+            let dst_y = (slice.y - virt_y).max(0) as usize;
+            let src_stride = (slice.w as usize) * 4;
+            let copy_bytes = src_stride.min((virt_w as usize).saturating_sub(dst_x) * 4);
+            let rows = (slice.h as usize).min((virt_h as usize).saturating_sub(dst_y));
+            for row in 0..rows {
+                let src_off = row * src_stride;
+                let dst_off = (dst_y + row) * virt_stride + dst_x * 4;
+                if src_off + copy_bytes <= slice.rgba.len() && dst_off + copy_bytes <= canvas.len() {
+                    canvas[dst_off..dst_off + copy_bytes]
+                        .copy_from_slice(&slice.rgba[src_off..src_off + copy_bytes]);
+                }
+            }
+        }
+        canvas
+    };
+
+    // Collect visible windows overlapping any screen inside the virtual desktop
+    let windows = collect_windows_on_monitor(
+        virt_x as f64,
+        virt_y as f64,
+        virt_w as f64,
+        virt_h as f64,
+    );
+
+    Ok(CaptureSession {
+        metadata: CaptureMetadata {
+            mode: mode.to_string(),
+            captured_at_iso,
+            captured_at_ms,
+            image_width: virt_w,
+            image_height: virt_h,
+            logical_width: logical_w,
+            logical_height: logical_h,
+            scale_factor: init_scale,
+            active_monitor,
+            windows,
+        },
+        rgba_bytes,
+        monitor_phys_x: virt_x,
+        monitor_phys_y: virt_y,
+        monitor_phys_w: virt_w,
+        monitor_phys_h: virt_h,
+        toast_phys_x,
+        toast_phys_y,
+        toast_phys_w,
+        toast_phys_h,
+        toast_scale,
+    })
+}
+
+#[cfg(not(target_os = "windows"))]
+fn capture_single_monitor_macos(app: &AppHandle, mode: &str) -> Result<CaptureSession, String> {
     // Freeze the exact capture moment BEFORE grabbing pixels
     let now = Local::now();
     let captured_at_iso = now.to_rfc3339();
@@ -114,6 +313,12 @@ pub fn capture_active_monitor(app: &AppHandle, mode: &str) -> Result<CaptureSess
             logical_width: logical_w,
             logical_height: logical_h,
             scale_factor: t_scale,
+            active_monitor: Some(MonitorNormalizedRect {
+                rx: 0.0,
+                ry: 0.0,
+                rw: 1.0,
+                rh: 1.0,
+            }),
             windows,
         },
         rgba_bytes,
@@ -121,9 +326,15 @@ pub fn capture_active_monitor(app: &AppHandle, mode: &str) -> Result<CaptureSess
         monitor_phys_y: t_pos.y,
         monitor_phys_w: t_size.width,
         monitor_phys_h: t_size.height,
+        toast_phys_x: t_pos.x,
+        toast_phys_y: t_pos.y,
+        toast_phys_w: t_size.width,
+        toast_phys_h: t_size.height,
+        toast_scale: t_scale,
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn select_matching_xcap_monitor(
     monitors: &[Monitor],
     phys_x: i32,
@@ -345,7 +556,9 @@ fn collect_windows_on_monitor_windows(
             }
 
             let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as usize;
-            if (ex_style & (WS_EX_TOOLWINDOW.0 as usize)) != 0 && class_name != "Shell_TrayWnd" {
+            let is_tray_bar =
+                class_name == "Shell_TrayWnd" || class_name == "Shell_SecondaryTrayWnd";
+            if (ex_style & (WS_EX_TOOLWINDOW.0 as usize)) != 0 && !is_tray_bar {
                 continue;
             }
 
@@ -390,7 +603,7 @@ fn collect_windows_on_monitor_windows(
                 String::new()
             };
 
-            if iw >= mon_w * 0.99 && ih >= mon_h * 0.99 && title.is_empty() {
+            if title.is_empty() && !is_tray_bar {
                 continue;
             }
 

@@ -699,13 +699,13 @@ fn trigger_capture(app: AppHandle, mode: String) {
                 let phys_y = session.monitor_phys_y;
                 let phys_w = session.monitor_phys_w;
                 let phys_h = session.monitor_phys_h;
-                let sc = session.metadata.scale_factor.max(1.0);
+                let toast_sc = session.toast_scale.max(1.0);
                 *LAST_MONITOR_BOUNDS.lock().unwrap() = Some(MonitorBounds {
-                    phys_x,
-                    phys_y,
-                    phys_w,
-                    phys_h,
-                    scale: sc,
+                    phys_x: session.toast_phys_x,
+                    phys_y: session.toast_phys_y,
+                    phys_w: session.toast_phys_w,
+                    phys_h: session.toast_phys_h,
+                    scale: toast_sc,
                 });
 
                 {
@@ -1038,7 +1038,7 @@ fn apply_native_overlay_window(
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
             SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_HIDEWINDOW, SWP_NOACTIVATE,
-            SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
+            SWP_NOMOVE, SWP_NOSENDCHANGING, SWP_NOSIZE, SWP_SHOWWINDOW,
         };
 
         if let Ok(hwnd) = ov.hwnd() {
@@ -1058,8 +1058,20 @@ fn apply_native_overlay_window(
                         phys_y,
                         phys_w as i32,
                         phys_h as i32,
-                        SWP_SHOWWINDOW,
+                        SWP_SHOWWINDOW | SWP_NOSENDCHANGING,
                     );
+                }
+                let actual_sc = ov.scale_factor().unwrap_or(1.0).max(1.0);
+                let actual_lw = phys_w as f64 / actual_sc;
+                let actual_lh = phys_h as f64 / actual_sc;
+                {
+                    let app_st = ov.app_handle().state::<Mutex<AppState>>();
+                    let mut guard = app_st.lock().unwrap();
+                    if let Some(ref mut session) = guard.active_session {
+                        session.metadata.scale_factor = actual_sc;
+                        session.metadata.logical_width = actual_lw;
+                        session.metadata.logical_height = actual_lh;
+                    }
                 }
             } else {
                 // Temporarily hide the fullscreen overlay on Windows so native dialogs

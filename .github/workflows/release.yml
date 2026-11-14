@@ -59,10 +59,10 @@ jobs:
             - **macOS (Universal):** `ZunzShot___VERSION___universal.dmg` (Apple Silicon e Intel)
             - **Windows (Instalador oficial):** `ZunzShot___VERSION___x64-setup.exe`
 
-            ### Mejoras y correcciones incluidas
-            - Estabilidad total en Windows: creación asíncrona de ventanas WebView2 sin bloqueos tras capturas o comandos (`Copiar`, `Guardar`, `Fijar`, `Imprimir`, `Compartir`).
-            - Detección de ventanas sin congelamientos en Windows: enumeración Win32/DWM directa con filtro de ventanas colgadas (`IsHungAppWindow`) sin alterar macOS.
-            - Cierre limpio desde barra de tareas y bandeja del sistema en Windows, y ocultación automática del selector durante diálogos nativos.
+            ### Novedades incluidas
+            - **Captura continua en múltiples pantallas (Windows):** Al capturar se atenúan todas tus pantallas al mismo tiempo para seleccionar dentro de cualquiera de ellas o cruzar entre varios monitores.
+            - **Controles centrados en el monitor activo (Windows):** Las barras y avisos aparecen en la pantalla donde está tu cursor sin cortarse entre bordes.
+            - **Ícono oficial en el instalador de Windows:** El instalador y desinstalador ahora muestran el logotipo de ZunzShot.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
