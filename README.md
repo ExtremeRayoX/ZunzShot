@@ -1,3 +1,7 @@
+<p align="right">
+  <strong>🇪🇸 Español</strong> &nbsp;|&nbsp; <a href="README.en.md">🇺🇸 English</a>
+</p>
+
 <div align="center">
 
 <img src="public/zunzshot-logo.png" alt="ZunzShot Logo" width="116" />
@@ -6,9 +10,9 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas)
-[![Bilingüe](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%2F_English-6366f1?style=for-the-badge)](#funcionalidades-e-íconos)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v104)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v104)
+[![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
@@ -24,7 +28,7 @@
 
 ---
 
-## Descargas — `v1.0.4`
+## Descargas (`v1.0.4`)
 
 Versión actual disponible: **ZunzShot v1.0.4**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
@@ -38,6 +42,17 @@ Versión actual disponible: **ZunzShot v1.0.4**. Haz clic directamente en la ima
 > ```bash
 > xattr -cr /Applications/ZunzShot.app
 > ```
+
+---
+
+## Privacidad y Funcionamiento 100 % Local
+
+ZunzShot está diseñado bajo un enfoque **local-first** para proteger tu pantalla y tus datos:
+
+- **Procesamiento 100 % en tu equipo:** Todas las capturas, anotaciones, stickers, textos y recortes se procesan y guardan exclusivamente de forma local (RAM, portapapeles o la carpeta que elijas).
+- **Sin nube ni terceros:** Tus imágenes nunca se suben ni se comparten con servidores externos salvo que tú mismo uses la acción de **Compartir** o **Guardar**.
+- **Sin telemetría ni rastreo:** No recopila estadísticas de uso, analítica, publicidad ni requiere cuentas o inicio de sesión.
+- **Conexión de red opcional únicamente para actualizaciones:** La única conexión externa posible es consultar los lanzamientos oficiales en GitHub (`github.com/ExtremeRayoX/ZunzShot/releases`) si activas la búsqueda automática o pulsas *Buscar actualizaciones* manualmente en Ajustes (puedes desactivarlo en cualquier momento o usar la edición **Windows Offline**).
 
 ---
 
