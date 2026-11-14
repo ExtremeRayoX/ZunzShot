@@ -40,6 +40,7 @@ import {
   hitTestSticker,
   measureClockSticker,
   renderExportPngBytes,
+  resetGeometryCache,
   type HandleId,
 } from "../canvas/geometry";
 import { getTranslations, type OverlayTooltipKey } from "../i18n/translations";
@@ -245,17 +246,25 @@ export const OverlayApp: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textOpenedAtRef = useRef<number>(0);
   const sessionOpenRef = useRef<boolean>(false);
+  const activeSessionTokenRef = useRef<number>(0);
   const copyInFlightRef = useRef<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
+  const viewportRef = useRef<{ w: number; h: number }>({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  });
+  const itemsCountRef = useRef<number>(0);
   const runtimePlatform = useMemo(() => detectPlatform(), []);
 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [metadata, setMetadata] = useState<CaptureMetadata | null>(null);
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
+  const [sessionReady, setSessionReady] = useState<boolean>(false);
   const [viewport, setViewport] = useState<{ w: number; h: number }>({
     w: window.innerWidth,
     h: window.innerHeight,
   });
+  viewportRef.current = viewport;
 
   const [captureMode, setCaptureMode] = useState<CaptureMode>("region");
   const [selection, setSelection] = useState<SelectionBox | null>(null);
@@ -286,6 +295,7 @@ export const OverlayApp: React.FC = () => {
     future: [],
   });
   const items = history.present;
+  itemsCountRef.current = items.length;
   const canUndo = history.past.length > 0;
 
   const [draftItem, setDraftItem] = useState<OverlayItem | null>(null);
@@ -420,29 +430,102 @@ export const OverlayApp: React.FC = () => {
     });
   }, []);
 
+  const clearCanvasBuffers = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+    const loupe = loupeCanvasRef.current;
+    if (loupe) {
+      const lctx = loupe.getContext("2d");
+      if (lctx) {
+        lctx.setTransform(1, 0, 0, 1, 0, 0);
+        lctx.clearRect(0, 0, loupe.width, loupe.height);
+      }
+    }
+    if (sampleCanvasRef.current) {
+      sampleCanvasRef.current.width = 0;
+      sampleCanvasRef.current.height = 0;
+      sampleCanvasRef.current = null;
+    }
+    resetGeometryCache();
+  }, []);
+
+  const focusOverlayCanvas = useCallback(() => {
+    try {
+      window.focus();
+      canvasRef.current?.focus({ preventScroll: true });
+    } catch {
+      // ignore focus errors
+    }
+  }, []);
+
+  const resetOverlayState = useCallback(() => {
+    sessionOpenRef.current = false;
+    copyInFlightRef.current = false;
+    setSessionReady(false);
+    dragRef.current = { kind: "none" };
+    updateSelection(null);
+    setHoveredWin(null);
+    setHistory({ past: [], present: [], future: [] });
+    setDraftItem(null);
+    setTextInput(null);
+    setSelectedStickerId(null);
+    setActivePopover(null);
+    setHoverTip(null);
+    setNextStepNum(1);
+    setLoupeInfo(null);
+    setToast(null);
+    setBitmap((prev) => {
+      prev?.close();
+      return null;
+    });
+    clearCanvasBuffers();
+  }, [clearCanvasBuffers, updateSelection]);
+
   // Load current capture session from Rust
   const loadActiveSession = useCallback(async () => {
+    const token = ++activeSessionTokenRef.current;
+    setSessionReady(false);
+    clearCanvasBuffers();
+
     try {
       const [cfg, meta] = await Promise.all([
         invoke<AppSettings>("get_settings"),
         invoke<CaptureMetadata | null>("get_capture_metadata"),
       ]);
+      if (token !== activeSessionTokenRef.current) return;
       setSettings(cfg);
       if (!meta) return;
 
       const buf = await invoke<ArrayBuffer>("get_capture_rgba");
+      if (token !== activeSessionTokenRef.current) return;
+
       const view = new DataView(buf);
       const imgW = view.getUint32(0, true);
       const imgH = view.getUint32(4, true);
       const pixels = new Uint8ClampedArray(buf, 8);
       const imgData = new ImageData(pixels, imgW, imgH);
       const bmp = await createImageBitmap(imgData);
+      if (token !== activeSessionTokenRef.current) {
+        bmp.close();
+        return;
+      }
 
-      const cssW = meta.logicalWidth || window.innerWidth;
-      const cssH = meta.logicalHeight || window.innerHeight;
+      const rawVw = window.innerWidth;
+      const rawVh = window.innerHeight;
+      const metaVw = Math.round(meta.logicalWidth || rawVw);
+      const metaVh = Math.round(meta.logicalHeight || rawVh);
+      const vw = Math.abs(rawVw - metaVw) <= 12 && rawVw > 0 ? rawVw : metaVw;
+      const vh = Math.abs(rawVh - metaVh) <= 12 && rawVh > 0 ? rawVh : metaVh;
 
-      const vw = window.innerWidth || cssW;
-      const vh = window.innerHeight || cssH;
+      viewportRef.current = { w: vw, h: vh };
       setViewport({ w: vw, h: vh });
       setMetadata(meta);
       setBitmap((prev) => {
@@ -451,6 +534,8 @@ export const OverlayApp: React.FC = () => {
       });
 
       sessionOpenRef.current = true;
+      copyInFlightRef.current = false;
+      dragRef.current = { kind: "none" };
       setCaptureMode(meta.mode);
       setHistory({ past: [], present: [], future: [] });
       setDraftItem(null);
@@ -469,16 +554,59 @@ export const OverlayApp: React.FC = () => {
       } else {
         updateSelection(null);
       }
+
+      setSessionReady(true);
+      window.requestAnimationFrame(() => {
+        focusOverlayCanvas();
+        window.setTimeout(focusOverlayCanvas, 40);
+      });
     } catch (err) {
       console.error("Failed loading capture session:", err);
     }
-  }, [updateSelection]);
+  }, [clearCanvasBuffers, focusOverlayCanvas, updateSelection]);
 
   useEffect(() => {
     void loadActiveSession();
     const unlistenReady = listen("zunzshot://session-ready", () => {
       void loadActiveSession();
     });
+    const unlistenReset = listen("zunzshot://session-reset", () => {
+      activeSessionTokenRef.current += 1;
+      resetOverlayState();
+    });
+    const unlistenFocus = listen("zunzshot://focus-canvas", () => {
+      focusOverlayCanvas();
+    });
+    const unlistenSwitchMode = listen<CaptureMode>(
+      "zunzshot://switch-mode",
+      (ev) => {
+        const nextMode = ev.payload;
+        if (!sessionOpenRef.current) return;
+        setCaptureMode(nextMode);
+        setTextInput(null);
+        setActivePopover(null);
+        setLoupeInfo(null);
+        setHoveredWin(null);
+
+        if (nextMode === "fullscreen") {
+          const vp = viewportRef.current;
+          updateSelection({ x: 0, y: 0, w: vp.w, h: vp.h, shape: "rect" });
+          setActiveTool("select");
+        } else if (itemsCountRef.current === 0) {
+          updateSelection(null);
+        } else if (nextMode === "circle") {
+          updateSelection((prev) =>
+            prev ? { ...prev, shape: "circle" } : null
+          );
+        } else if (nextMode === "region") {
+          updateSelection((prev) => (prev ? { ...prev, shape: "rect" } : null));
+        }
+
+        window.requestAnimationFrame(() => {
+          focusOverlayCanvas();
+        });
+      }
+    );
     const unlistenSettings = listen<AppSettings>(
       "zunzshot://settings-updated",
       (ev) => {
@@ -487,37 +615,27 @@ export const OverlayApp: React.FC = () => {
     );
 
     const onResize = () => {
-      setViewport({ w: window.innerWidth, h: window.innerHeight });
+      const nextVp = { w: window.innerWidth, h: window.innerHeight };
+      viewportRef.current = nextVp;
+      setViewport(nextVp);
     };
     window.addEventListener("resize", onResize);
 
     return () => {
       void unlistenReady.then((fn) => fn());
+      void unlistenReset.then((fn) => fn());
+      void unlistenFocus.then((fn) => fn());
+      void unlistenSwitchMode.then((fn) => fn());
       void unlistenSettings.then((fn) => fn());
       window.removeEventListener("resize", onResize);
     };
-  }, [loadActiveSession]);
+  }, [focusOverlayCanvas, loadActiveSession, resetOverlayState, updateSelection]);
 
   const handleClose = useCallback(async () => {
-    sessionOpenRef.current = false;
-    copyInFlightRef.current = false;
-    dragRef.current = { kind: "none" };
-    updateSelection(null);
-    setHistory({ past: [], present: [], future: [] });
-    setDraftItem(null);
-    setTextInput(null);
-    setSelectedStickerId(null);
-    setActivePopover(null);
-    setHoverTip(null);
-    setNextStepNum(1);
-    setLoupeInfo(null);
-    setToast(null);
-    setBitmap((prev) => {
-      prev?.close();
-      return null;
-    });
+    activeSessionTokenRef.current += 1;
+    resetOverlayState();
     await invoke("close_overlay").catch(() => {});
-  }, [updateSelection]);
+  }, [resetOverlayState]);
 
   const samplePixelHex = useCallback(
     (px: number, py: number): string | null => {
@@ -687,7 +805,15 @@ export const OverlayApp: React.FC = () => {
   // Render full-screen canvas every frame dependencies update
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !bitmap || !metadata) return;
+    if (!canvas) return;
+    if (!bitmap || !metadata || !sessionReady) {
+      const clearCtx = canvas.getContext("2d");
+      if (clearCtx) {
+        clearCtx.setTransform(1, 0, 0, 1, 0, 0);
+        clearCtx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
 
     const dpr = window.devicePixelRatio || 1;
     const { w: cssW, h: cssH } = viewport;
@@ -823,6 +949,7 @@ export const OverlayApp: React.FC = () => {
   }, [
     bitmap,
     metadata,
+    sessionReady,
     viewport,
     selection,
     captureMode,
@@ -1061,6 +1188,7 @@ export const OverlayApp: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => {
+        URL.revokeObjectURL(url);
         const targetBox = selection ?? {
           x: viewport.w * 0.25,
           y: viewport.h * 0.25,
@@ -1150,57 +1278,78 @@ export const OverlayApp: React.FC = () => {
 
       if (matchesAccelerator(e, cmdCancel, runtimePlatform)) {
         e.preventDefault();
+        e.stopPropagation();
         void handleClose();
         return;
       }
       if (selection && matchesAccelerator(e, cmdCopy, runtimePlatform)) {
         e.preventDefault();
+        e.stopPropagation();
         void handleCopy();
         return;
       }
       if (selection && matchesAccelerator(e, cmdSave, runtimePlatform)) {
         e.preventDefault();
+        e.stopPropagation();
         void handleSave();
         return;
       }
       if (selection && matchesAccelerator(e, cmdPin, runtimePlatform)) {
         e.preventDefault();
+        e.stopPropagation();
         void handlePin();
         return;
       }
       if (selection && matchesAccelerator(e, cmdShare, runtimePlatform)) {
         e.preventDefault();
+        e.stopPropagation();
         void handleShare(shareBtnRef.current?.getBoundingClientRect());
         return;
       }
       if (selection && matchesAccelerator(e, cmdPrint, runtimePlatform)) {
         e.preventDefault();
+        e.stopPropagation();
         void handlePrint();
         return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         void handleClose();
         return;
       }
 
       const mod = e.metaKey || e.ctrlKey;
+      const keyLower = e.key.toLowerCase();
+
+      // Suppress WebView2 / Chromium default browser accelerators (Print, Save, Find, Reload)
       if (
-        (mod && e.shiftKey && e.key.toLowerCase() === "z") ||
-        (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "y")
+        e.key === "F5" ||
+        (mod && (keyLower === "r" || keyLower === "f" || keyLower === "g" || keyLower === "p" || keyLower === "s"))
       ) {
         e.preventDefault();
+        e.stopPropagation();
+      }
+
+      if (
+        (mod && e.shiftKey && keyLower === "z") ||
+        (e.ctrlKey && !e.metaKey && keyLower === "y")
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
         handleRedo();
         return;
       }
-      if (mod && e.key.toLowerCase() === "z") {
+      if (mod && keyLower === "z") {
         e.preventDefault();
+        e.stopPropagation();
         handleUndo();
         return;
       }
 
       if ((e.key === "Delete" || e.key === "Backspace") && selectedStickerId) {
         e.preventDefault();
+        e.stopPropagation();
         commitItems((prev) => prev.filter((i) => i.id !== selectedStickerId));
         setSelectedStickerId(null);
         return;
@@ -1214,6 +1363,7 @@ export const OverlayApp: React.FC = () => {
         const dy =
           e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
         e.preventDefault();
+        e.stopPropagation();
 
         if (selectedStickerId) {
           commitItems((prev) =>
@@ -1254,10 +1404,10 @@ export const OverlayApp: React.FC = () => {
       }
     };
 
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("paste", onPaste);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("paste", onPaste);
     };
   }, [
@@ -1314,6 +1464,9 @@ export const OverlayApp: React.FC = () => {
     if (textInput) {
       commitText();
       return;
+    }
+    if (!selection || activeTool !== "text") {
+      focusOverlayCanvas();
     }
 
     const px = e.clientX;
@@ -1956,9 +2109,22 @@ export const OverlayApp: React.FC = () => {
   void measureClockSticker;
 
   return (
-    <div className="overlay-root">
+    <div
+      className="overlay-root"
+      style={{
+        opacity: sessionReady && bitmap ? 1 : 0,
+        pointerEvents: sessionReady && bitmap ? "auto" : "none",
+      }}
+      onMouseDown={() => {
+        if (!textInput) {
+          focusOverlayCanvas();
+        }
+      }}
+    >
       <canvas
         ref={canvasRef}
+        tabIndex={-1}
+        style={{ outline: "none" }}
         className={`overlay-canvas cursor-${
           !selection
             ? captureMode === "window"

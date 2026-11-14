@@ -302,6 +302,16 @@ export interface PixelSource {
 }
 
 let pixelScratchCanvas: HTMLCanvasElement | null = null;
+
+/** Releases backing pixel memory held by the pixelation scratch canvas between sessions. */
+export function resetGeometryCache(): void {
+  if (pixelScratchCanvas) {
+    pixelScratchCanvas.width = 0;
+    pixelScratchCanvas.height = 0;
+    pixelScratchCanvas = null;
+  }
+}
+
 function getPixelScratch(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D | null] {
   if (!pixelScratchCanvas) {
     pixelScratchCanvas = document.createElement("canvas");

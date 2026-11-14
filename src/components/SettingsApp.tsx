@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -95,6 +95,7 @@ export const SettingsApp: React.FC = () => {
   const [recordingField, setRecordingField] = useState<ShortcutFieldKey | null>(null);
   const [liveTokens, setLiveTokens] = useState<string[]>([]);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const shortcutSavedRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -240,6 +241,7 @@ export const SettingsApp: React.FC = () => {
       return;
     }
 
+    shortcutSavedRef.current = false;
     const isOverlayCmd = (OVERLAY_CMD_FIELDS as readonly string[]).includes(
       recordingField
     );
@@ -304,6 +306,7 @@ export const SettingsApp: React.FC = () => {
       }
 
       const updated: AppSettings = { ...settings, [recordingField]: nextCombo };
+      shortcutSavedRef.current = true;
       setRecordingField(null);
       setLiveTokens([]);
       setShortcutError(null);
@@ -333,7 +336,9 @@ export const SettingsApp: React.FC = () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("blur", onBlur);
-      void invoke("set_shortcuts_paused", { paused: false });
+      if (!shortcutSavedRef.current) {
+        void invoke("set_shortcuts_paused", { paused: false });
+      }
     };
   }, [recordingField, tab, settings, platform, t]);
 

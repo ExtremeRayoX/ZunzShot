@@ -28,9 +28,62 @@ use tauri_plugin_updater::UpdaterExt;
 
 static ALLOW_APP_EXIT: AtomicBool = AtomicBool::new(false);
 static AUTO_UPDATE_CHECKED: AtomicBool = AtomicBool::new(false);
+static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+static SHORTCUTS_PAUSED: AtomicBool = AtomicBool::new(false);
+static SHORTCUT_OP_LOCK: std::sync::LazyLock<Mutex<()>> =
+    std::sync::LazyLock::new(|| Mutex::new(()));
 static NEXT_PIN_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TOAST_ID: AtomicU64 = AtomicU64::new(1);
 static LAST_MONITOR_LOGICAL: Mutex<Option<(f64, f64, f64, f64)>> = Mutex::new(None);
+
+struct CaptureInProgressGuard;
+
+impl Drop for CaptureInProgressGuard {
+    fn drop(&mut self) {
+        CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn force_windows_foreground_and_webview_focus(win: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{SetActiveWindow, SetFocus};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
+        ShowWindow, SW_SHOW,
+    };
+
+    if let Ok(raw_hwnd) = win.hwnd() {
+        let hwnd = HWND(raw_hwnd.0);
+        unsafe {
+            let fg_hwnd = GetForegroundWindow();
+            let fg_tid = if !fg_hwnd.0.is_null() {
+                GetWindowThreadProcessId(fg_hwnd, None)
+            } else {
+                0
+            };
+            let cur_tid = GetCurrentThreadId();
+            let attached = if fg_tid != 0 && fg_tid != cur_tid {
+                AttachThreadInput(cur_tid, fg_tid, true).as_bool()
+            } else {
+                false
+            };
+
+            let _ = ShowWindow(hwnd, SW_SHOW);
+            let _ = BringWindowToTop(hwnd);
+            let _ = SetForegroundWindow(hwnd);
+            let _ = SetActiveWindow(hwnd);
+            let _ = SetFocus(Some(hwnd));
+
+            if attached {
+                let _ = AttachThreadInput(cur_tid, fg_tid, false);
+            }
+        }
+    }
+    let _ = win.set_focus();
+    let _ = AsRef::<tauri::Webview<_>>::as_ref(win).set_focus();
+}
 
 pub struct AppState {
     pub settings: AppSettings,
@@ -224,8 +277,10 @@ fn refresh_tray_menu(app: &AppHandle) {
 }
 
 fn register_shortcuts(app: &AppHandle, settings: &AppSettings) {
+    let _op_guard = SHORTCUT_OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
+    SHORTCUTS_PAUSED.store(false, Ordering::SeqCst);
 
     if !has_screen_capture_permission() {
         let state = app.state::<Mutex<AppState>>();
@@ -248,6 +303,9 @@ fn register_shortcuts(app: &AppHandle, settings: &AppSettings) {
         }
         if let Ok(shortcut) = Shortcut::from_str(accel.trim()) {
             let id = shortcut.id();
+            // Explicitly unregister per-hotkey before registering in case unregister_all aborted
+            // partway through on Windows, leaving a stale Win32 hotkey behind.
+            let _ = gs.unregister(shortcut);
             if gs.register(shortcut).is_ok() {
                 map.insert(id, mode.to_string());
             }
@@ -263,43 +321,59 @@ fn attach_main_close_handler(app: &AppHandle, win: &WebviewWindow) {
     let app_for_close = app.clone();
     win.on_window_event(move |event| {
         if let WindowEvent::CloseRequested { .. } = event {
-            // Re-register shortcuts in case settings window closed while recording keys,
-            // and allow the window to destroy cleanly so idle RAM drops significantly.
-            let current = app_for_close
-                .state::<Mutex<AppState>>()
-                .lock()
-                .unwrap()
-                .settings
-                .clone();
-            register_shortcuts(&app_for_close, &current);
+            // Only re-register shortcuts if Settings was closed mid-recording while paused.
+            if SHORTCUTS_PAUSED.load(Ordering::SeqCst) {
+                let current = app_for_close
+                    .state::<Mutex<AppState>>()
+                    .lock()
+                    .unwrap()
+                    .settings
+                    .clone();
+                register_shortcuts(&app_for_close, &current);
+            }
         }
     });
 }
 
-fn show_settings_window(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.show();
-        let _ = win.unminimize();
-        let _ = win.set_focus();
-        return;
+fn focus_settings_window(win: &WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    {
+        force_windows_foreground_and_webview_focus(win);
     }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = win.set_focus();
+        let _ = AsRef::<tauri::Webview<_>>::as_ref(win).set_focus();
+    }
+}
 
-    let cfg = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|w| w.label == "main")
-        .cloned();
+fn show_settings_window(app: &AppHandle) {
+    let app_handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(win) = app_handle.get_webview_window("main") {
+            let _ = win.show();
+            let _ = win.unminimize();
+            focus_settings_window(&win);
+            return;
+        }
 
-    if let Some(cfg) = cfg {
-        if let Ok(builder) = WebviewWindowBuilder::from_config(app, &cfg) {
-            if let Ok(win) = builder.visible(true).build() {
-                attach_main_close_handler(app, &win);
-                let _ = win.set_focus();
+        let cfg = app_handle
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|w| w.label == "main")
+            .cloned();
+
+        if let Some(cfg) = cfg {
+            if let Ok(builder) = WebviewWindowBuilder::from_config(&app_handle, &cfg) {
+                if let Ok(win) = builder.visible(true).build() {
+                    attach_main_close_handler(&app_handle, &win);
+                    focus_settings_window(&win);
+                }
             }
         }
-    }
+    });
 }
 
 fn open_settings_tab(app: &AppHandle, tab: &str) {
@@ -335,22 +409,68 @@ fn trigger_capture(app: AppHandle, mode: String) {
         return;
     }
 
-    std::thread::spawn(move || {
-        let mut hid_main = false;
-        if let Some(main_win) = app.get_webview_window("main") {
-            if main_win.is_visible().unwrap_or(false) {
-                let _ = main_win.hide();
-                hid_main = true;
-            }
+    // If an active capture overlay is already visible, switch its mode instead of
+    // re-capturing over the dimmed overlay window.
+    if let Some(ov) = app.get_webview_window("overlay") {
+        let has_active_session = app
+            .state::<Mutex<AppState>>()
+            .lock()
+            .unwrap()
+            .active_session
+            .is_some();
+        if has_active_session && ov.is_visible().unwrap_or(false) {
+            let _ = ov.emit("zunzshot://switch-mode", &mode);
+            let ov_focus = ov.clone();
+            let _ = app.run_on_main_thread(move || {
+                #[cfg(target_os = "windows")]
+                force_windows_foreground_and_webview_focus(&ov_focus);
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = ov_focus.set_focus();
+                    let _ = AsRef::<tauri::Webview<_>>::as_ref(&ov_focus).set_focus();
+                }
+                let _ = ov_focus.emit("zunzshot://focus-canvas", ());
+            });
+            return;
         }
+    }
+
+    if CAPTURE_IN_PROGRESS
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+
+    std::thread::spawn(move || {
+        let _capture_guard = CaptureInProgressGuard;
+
         if let Some(ov) = app.get_webview_window("overlay") {
-            if ov.is_visible().unwrap_or(false) {
-                let _ = ov.hide();
-                hid_main = true;
-            }
+            let _ = ov.emit("zunzshot://session-reset", ());
         }
 
-        if hid_main {
+        let (tx, rx) = std::sync::mpsc::channel::<bool>();
+        let app_hide = app.clone();
+        if app
+            .run_on_main_thread(move || {
+                let mut hid_any = false;
+                if let Some(main_win) = app_hide.get_webview_window("main") {
+                    if main_win.is_visible().unwrap_or(false) {
+                        let _ = main_win.hide();
+                        hid_any = true;
+                    }
+                }
+                if let Some(ov) = app_hide.get_webview_window("overlay") {
+                    if ov.is_visible().unwrap_or(false) {
+                        hide_overlay_on_main_thread(&app_hide, &[], false);
+                        hid_any = true;
+                    }
+                }
+                let _ = tx.send(hid_any);
+            })
+            .is_ok()
+            && matches!(rx.recv_timeout(Duration::from_millis(500)), Ok(true))
+        {
             std::thread::sleep(Duration::from_millis(140));
         }
 
@@ -423,6 +543,14 @@ fn save_settings_cmd(
     if !has_screen_capture_permission() {
         return Err("Screen recording permission is required on macOS".to_string());
     }
+
+    // Update shared state before disk I/O so any concurrent reader always sees latest settings.
+    let has_active_session = {
+        let mut guard = state.lock().unwrap();
+        guard.settings = new_settings.clone();
+        guard.active_session.is_some()
+    };
+
     save_settings(&app, &new_settings)?;
 
     // Sync OS autostart preference
@@ -432,12 +560,6 @@ fn save_settings_cmd(
     } else {
         let _ = autostart.disable();
     }
-
-    let has_active_session = {
-        let mut guard = state.lock().unwrap();
-        guard.settings = new_settings.clone();
-        guard.active_session.is_some()
-    };
 
     if new_settings.ultra_light_mode {
         if !has_active_session {
@@ -513,11 +635,13 @@ fn complete_onboarding_cmd(
 }
 
 #[tauri::command]
-fn set_shortcuts_paused(app: AppHandle, paused: bool) {
+fn set_shortcuts_paused(app: AppHandle, state: State<'_, Mutex<AppState>>, paused: bool) {
     if paused {
+        let _op_guard = SHORTCUT_OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        SHORTCUTS_PAUSED.store(true, Ordering::SeqCst);
         let _ = app.global_shortcut().unregister_all();
     } else {
-        let settings = app.state::<Mutex<AppState>>().lock().unwrap().settings.clone();
+        let settings = state.lock().unwrap().settings.clone();
         register_shortcuts(&app, &settings);
     }
 }
@@ -632,6 +756,8 @@ fn apply_native_overlay_window(
                         ns_win.orderFrontRegardless();
                         #[allow(deprecated)]
                         NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+                        let _ = ov.set_focus();
+                        let _ = AsRef::<tauri::Webview<_>>::as_ref(ov).set_focus();
                     } else {
                         // Temporarily drop to normal window level so NSSavePanel / file picker appears on top.
                         ns_win.setLevel(0);
@@ -650,19 +776,20 @@ fn apply_native_overlay_window(
     {
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
-            SetForegroundWindow, SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE,
-            SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW,
+            SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+            SWP_SHOWWINDOW,
         };
 
         if let Ok(hwnd) = ov.hwnd() {
             let hwnd = HWND(hwnd.0);
-            unsafe {
-                if elevated {
-                    let _ = ov.set_position(Position::Physical(PhysicalPosition::new(
-                        phys_x, phys_y,
-                    )));
-                    let _ = ov.set_size(Size::Physical(PhysicalSize::new(phys_w, phys_h)));
-                    let _ = ov.show();
+            if elevated {
+                let _ = ov.set_focusable(true);
+                let _ = ov.set_position(Position::Physical(PhysicalPosition::new(
+                    phys_x, phys_y,
+                )));
+                let _ = ov.set_size(Size::Physical(PhysicalSize::new(phys_w, phys_h)));
+                let _ = ov.show();
+                unsafe {
                     let _ = SetWindowPos(
                         hwnd,
                         Some(HWND_TOPMOST),
@@ -672,9 +799,9 @@ fn apply_native_overlay_window(
                         phys_h as i32,
                         SWP_SHOWWINDOW,
                     );
-                    let _ = SetForegroundWindow(hwnd);
-                    let _ = ov.set_focus();
-                } else {
+                }
+            } else {
+                unsafe {
                     let _ = SetWindowPos(
                         hwnd,
                         Some(HWND_NOTOPMOST),
@@ -685,6 +812,21 @@ fn apply_native_overlay_window(
                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
                     );
                 }
+            }
+            if elevated {
+                force_windows_foreground_and_webview_focus(ov);
+                let _ = ov.emit("zunzshot://focus-canvas", ());
+                let ov_delayed = ov.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(35));
+                    let ov_main = ov_delayed.clone();
+                    let _ = ov_delayed.run_on_main_thread(move || {
+                        if ov_main.is_visible().unwrap_or(false) {
+                            force_windows_foreground_and_webview_focus(&ov_main);
+                            let _ = ov_main.emit("zunzshot://focus-canvas", ());
+                        }
+                    });
+                });
             }
             if emit_ready {
                 let _ = ov.emit("zunzshot://session-ready", ());
@@ -700,6 +842,7 @@ fn apply_native_overlay_window(
         let _ = ov.set_visible_on_all_workspaces(true);
         let _ = ov.show();
         let _ = ov.set_focus();
+        let _ = AsRef::<tauri::Webview<_>>::as_ref(ov).set_focus();
     } else {
         let _ = ov.set_always_on_top(false);
     }
@@ -739,6 +882,7 @@ fn set_overlay_elevated(app: AppHandle, elevated: bool) {
 
 fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destroy_ov: bool) {
     if let Some(ov) = app_handle.get_webview_window("overlay") {
+        let _ = ov.emit("zunzshot://session-reset", ());
         #[cfg(target_os = "windows")]
         if let Ok(hwnd) = ov.hwnd() {
             use windows::Win32::Foundation::HWND;

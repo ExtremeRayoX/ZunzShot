@@ -8,11 +8,11 @@
 
 [![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Descarga&color=06d6c6&style=for-the-badge)](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
 [![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Disponible-10b981?style=for-the-badge)](#descargas)
-[![Bilingüe](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%2F_English-6366f1?style=for-the-badge)](#caracteristicas)
+[![Bilingüe](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%2F_English-6366f1?style=for-the-badge)](#funcionalidades-e-íconos)
 
 <br />
 
-[**⬇️ Descargar para Windows (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Windows Offline (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Descargar para macOS (.dmg)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
+[**⬇️ Windows Ligero (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ Windows Offline (.exe)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest) · [**⬇️ macOS Universal (.dmg)**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest)
 
 </div>
 
@@ -20,13 +20,13 @@
 
 ## Descargas
 
-Descarga el instalador más reciente para tu sistema operativo desde la sección [**Releases de GitHub**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest):
+Descarga el instalador más reciente para tu sistema operativo desde [**Releases de GitHub**](https://github.com/ExtremeRayoX/ZunzShot/releases/latest):
 
-| Plataforma | Archivo recomendado | Notas de instalación |
+| Plataforma | Instalador | Detalles |
 | :--- | :--- | :--- |
-| **Windows 10 / 11 (Ligero — recomendado)** | `ZunzShot_*_x64-setup.exe` | Instalador liviano (usa WebView2 del sistema o lo descarga si falta). Elige tu idioma (**Español / English**) y recibe actualizaciones automáticas. |
-| **Windows 10 / 11 (Offline completo)** | `ZunzShot_*_x64-offline-setup.exe` | Incluye todo lo necesario para instalar sin conexión a internet (mismas funciones y actualizaciones automáticas). |
-| **macOS 12.3+ (Apple Silicon & Intel)** | `ZunzShot_*_universal.dmg` | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| **Windows 10 / 11 (Ligero — recomendado)** | `ZunzShot_*_x64-setup.exe` | Instalador compacto para instalación habitual con conexión a internet. Incluye selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| **Windows 10 / 11 (Offline completo)** | `ZunzShot_*_x64-offline-setup.exe` | Paquete autónomo con motor integrado para instalar en equipos sin acceso a internet, con exactamente las mismas funciones. |
+| **macOS 12.3+ (Apple Silicon e Intel)** | `ZunzShot_*_universal.dmg` | Arrastra **ZunzShot** a **Aplicaciones** y otorga el permiso de **Grabación de Pantalla** al abrirla por primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -35,41 +35,83 @@ Descarga el instalador más reciente para tu sistema operativo desde la sección
 
 ---
 
-## Características
+## Funcionalidades e Íconos
 
-- **Copiado rápido (`⌘/Ctrl + Shift + D`):** Selecciona un área y al soltar se copia directamente al portapapeles, se cierra el selector y muestra una notificación flotante sin quitarte el foco de donde vas a pegar.
-- **Múltiples modos de captura:** Encuadre libre movible/redimensionable, **recorte circular con fondo transparente PNG**, detección automática de ventanas abiertas y pantalla completa.
-- **Edición instantánea en barra en L:**
-  - **Herramientas creativas:** Lápiz libre, resaltador, subrayado, flechas, rectángulos, círculos, texto directo y **pixelado** para ocultar datos sensibles.
-  - **Lupa de píxeles y cuentagotas:** Zoom preciso por píxel al arrastrar y selector `#HEX` en un clic.
-  - **Extras y stickers:** Inserta pasos numerados (`1, 2, 3...`), imágenes encima (pegando con `⌘/Ctrl + V` o desde archivo con máscara cuadrada, redondeada o circular) y sticker congelado de fecha y hora exactas.
-  - **Acciones rápidas:** Copiar, guardar PNG/JPG, **fijar captura flotante en pantalla** (con ajuste de opacidad y copiar), compartir e imprimir.
-- **Atajos y comandos personalizables:** Configura tanto los atajos globales de captura como las teclas rápidas de la barra lateral directamente desde **Configuración → Atajos**.
-- **Ultra liviano:** Consume mínimos recursos en segundo plano e incluye **Modo Ultra Liviano** opcional para liberar aún más memoria en reposo.
-- **Actualizador integrado:** Activa las actualizaciones automáticas al instalar o desde **Configuración → Acerca de** para mantener ZunzShot siempre al día.
+Al activar una captura aparece la interfaz flotante con los **modos de captura**, la **barra horizontal de edición**, las **herramientas creativas** y la **barra vertical de acciones**. Aquí tienes qué hace cada ícono tal como aparece en la aplicación:
+
+### Modos de captura
+
+| Ícono | Modo | Atajo macOS | Atajo Windows | Para qué sirve |
+| :---: | :--- | :---: | :---: | :--- |
+| <img src="docs/icons/mode-quick.svg" width="26" height="26" alt="Copiado rápido" /> | **Copiado rápido** | `⌘ + ⇧ + D` | `Ctrl + Shift + D` | Selecciona cualquier área y, al soltar el cursor, copia la imagen al portapapeles de inmediato, cierra el selector y muestra un aviso flotante sin quitar el foco de tu ventana activa. |
+| <img src="docs/icons/mode-region.svg" width="26" height="26" alt="Encuadre libre" /> | **Capturar encuadre** | `⌘ + ⇧ + X` | `Ctrl + Shift + X` | Dibuja una selección rectangular movible y redimensionable con lupa de precisión de píxeles y barra de edición completa. |
+| <img src="docs/icons/mode-circle.svg" width="26" height="26" alt="Captura circular" /> | **Captura circular** | `⌘ + ⇧ + C` | `Ctrl + Shift + C` | Recorta en forma circular o elíptica con fondo transparente (exportado en PNG), ideal para avatares y detalles circulares. |
+| <img src="docs/icons/mode-window.svg" width="26" height="26" alt="Capturar ventana" /> | **Capturar ventana** | `⌘ + ⇧ + W` | `Ctrl + Shift + W` | Detecta y resalta automáticamente ventanas y aplicaciones abiertas para capturarlas con un clic. |
+| <img src="docs/icons/mode-fullscreen.svg" width="26" height="26" alt="Pantalla completa" /> | **Pantalla completa** | `⌘ + ⇧ + F` | `Ctrl + Shift + F` | Selecciona al instante todo el monitor activo listo para editar, copiar, fijar o guardar. |
 
 ---
 
-## Atajos predeterminados
+### Barra horizontal de herramientas y edición
 
-### Captura global
-| Acción | macOS | Windows |
-| :--- | :--- | :--- |
-| Copiado rápido (seleccionar y copiar) | `⌘ + ⇧ + D` | `Ctrl + Shift + D` |
-| Capturar encuadre | `⌘ + ⇧ + X` | `Ctrl + Shift + X` |
-| Captura circular | `⌘ + ⇧ + C` | `Ctrl + Shift + C` |
-| Capturar aplicación / ventana | `⌘ + ⇧ + W` | `Ctrl + Shift + W` |
-| Pantalla completa | `⌘ + ⇧ + F` | `Ctrl + Shift + F` |
+| Ícono | Herramienta | Para qué sirve |
+| :---: | :--- | :--- |
+| <img src="docs/icons/tool-select.svg" width="26" height="26" alt="Seleccionar y mover" /> | **Seleccionar / Mover** | Ajusta libremente el recuadro de captura o arrastra y redimensiona stickers, fotos y pasos agregados encima. |
+| <img src="docs/icons/tool-pen.svg" width="26" height="26" alt="Lápiz libre" /> | **Lápiz libre** *(submenú Trazos)* | Dibuja anotaciones a mano alzada sobre cualquier parte de la captura. |
+| <img src="docs/icons/tool-marker.svg" width="26" height="26" alt="Resaltador" /> | **Resaltador** *(submenú Trazos)* | Destaca texto o áreas importantes con trazo translúcido tipo marcador. |
+| <img src="docs/icons/tool-underline.svg" width="26" height="26" alt="Subrayar" /> | **Subrayar** *(submenú Trazos)* | Traza líneas rectas horizontales perfectas para subrayar frases o cifras rápidamente. |
+| <img src="docs/icons/tool-arrow.svg" width="26" height="26" alt="Flecha" /> | **Flecha** | Señala botones, menús o elementos clave con flechas nítidas y personalizables. |
+| <img src="docs/icons/tool-rect.svg" width="26" height="26" alt="Rectángulo" /> | **Rectángulo** *(submenú Formas)* | Enmarca zonas o bloques completos mediante rectángulos limpios. |
+| <img src="docs/icons/tool-circle.svg" width="26" height="26" alt="Círculo / Óvalo" /> | **Círculo / Óvalo** *(submenú Formas)* | Rodea íconos, números o elementos concretos con óvalos o círculos. |
+| <img src="docs/icons/tool-text.svg" width="26" height="26" alt="Texto" /> | **Texto** | Inserta etiquetas y comentarios escritos directamente sobre la imagen con fondo legible. |
+| <img src="docs/icons/tool-pixelate.svg" width="26" height="26" alt="Pixelar / Censurar" /> | **Pixelar / Censurar** | Aplica efecto mosaico para ocultar contraseñas, correos, rostros o datos confidenciales. |
+| <img src="docs/icons/tool-crop-circle.svg" width="26" height="26" alt="Alternar forma de recorte" /> <img src="docs/icons/tool-crop-rect.svg" width="26" height="26" alt="Cambiar a rectángulo" /> | **Recorte Rectangular / Circular** | Convierte tu selección actual entre rectángulo y círculo en cualquier momento sin perder tus trazos. |
+| <img src="docs/icons/tool-sticker.svg" width="26" height="26" alt="Extras y Stickers" /> | **Extras y Stickers** | Abre el menú de elementos creativos para añadir imágenes, hora congelada y pasos numerados. |
+| <img src="docs/icons/tool-palette.svg" width="26" height="26" alt="Color, grosor y cuentagotas" /> | **Color y Grosor** | Elige entre los colores de la paleta, ajusta el grosor (`S / M / L`) o activa el cuentagotas. |
+| <img src="docs/icons/tool-eyedropper.svg" width="26" height="26" alt="Cuentagotas" /> | **Cuentagotas `#HEX`** *(dentro de Color)* | Amplía los píxeles bajo el cursor y copia el código `#HEX` exacto del color al portapapeles. |
+| <img src="docs/icons/tool-undo.svg" width="26" height="26" alt="Deshacer" /> | **Deshacer** | Revierte el último trazo, forma o sticker agregado *(también `⌘/Ctrl + Z` y rehacer con `⌘/Ctrl + ⇧ + Z` o `Ctrl + Y`)*. |
 
-### Comandos dentro de la captura *(editables en Ajustes)*
-| Acción | macOS | Windows |
-| :--- | :--- | :--- |
-| Copiar captura | `⌘ + C` | `Ctrl + C` |
-| Guardar archivo | `⌘ + S` | `Ctrl + S` |
-| Fijar en pantalla | `⌘ + ⇧ + P` | `Ctrl + Shift + P` |
-| Compartir | `⌘ + ⇧ + E` | `Ctrl + Shift + E` |
-| Imprimir | `⌘ + P` | `Ctrl + P` |
-| Cerrar | `Esc` | `Esc` |
+#### Dentro de Extras y Stickers
+
+| Ícono | Extra | Para qué sirve |
+| :---: | :--- | :--- |
+| <img src="docs/icons/tool-photo.svg" width="26" height="26" alt="Agregar foto o sticker" /> | **Foto / Imagen superpuesta** | Inserta una imagen estática sobre tu captura (desde archivo o pegando directo con `⌘/Ctrl + V`) con recorte cuadrado, redondeado o circular. |
+| <img src="docs/icons/tool-clock.svg" width="26" height="26" alt="Sticker de fecha y hora" /> | **Sticker de Fecha y Hora** | Coloca un sello visual elegante con la fecha y hora exacta en que se tomó la captura (configurable en 12h/24h y estilos). |
+| <img src="docs/icons/tool-step.svg" width="26" height="26" alt="Pasos numerados" /> | **Pasos numerados (`1, 2, 3...`)** | Agrega burbujas numeradas consecutivas para crear guías visuales y tutoriales paso a paso en segundos. |
+
+---
+
+### Barra vertical de acciones *(editable en Ajustes)*
+
+| Ícono | Acción | Atajo macOS | Atajo Windows | Para qué sirve |
+| :---: | :--- | :---: | :---: | :--- |
+| <img src="docs/icons/action-copy.svg" width="26" height="26" alt="Copiar captura" /> | **Copiar** | `⌘ + C` | `Ctrl + C` | Copia la captura final con todas sus anotaciones y stickers al portapapeles. |
+| <img src="docs/icons/action-save.svg" width="26" height="26" alt="Guardar imagen" /> | **Guardar** | `⌘ + S` | `Ctrl + S` | Exporta la captura a disco en formato **PNG** o **JPG** en la carpeta que prefieras. |
+| <img src="docs/icons/action-pin.svg" width="26" height="26" alt="Fijar en pantalla" /> | **Fijar en pantalla (Pin)** | `⌘ + ⇧ + P` | `Ctrl + Shift + P` | Convierte el recorte en una ventana flotante siempre visible sobre tus demás apps *(con control de opacidad y copiado rápido)*. |
+| <img src="docs/icons/action-share.svg" width="26" height="26" alt="Compartir" /> | **Compartir** | `⌘ + ⇧ + E` | `Ctrl + Shift + E` | Abre las opciones de uso compartido del sistema para enviar la captura al instante. |
+| <img src="docs/icons/action-print.svg" width="26" height="26" alt="Imprimir" /> | **Imprimir** | `⌘ + P` | `Ctrl + P` | Envía la captura directamente al diálogo de impresión del sistema. |
+| <img src="docs/icons/action-close.svg" width="26" height="26" alt="Cerrar captura" /> | **Cancelar / Cerrar** | `Esc` | `Esc` | Cierra la captura limpia y vuelve al estado en segundo plano sin dejar rastros. |
+
+---
+
+## Notas de Versión
+
+### `v1.0.2`
+- **Estabilidad y respuesta en Windows:** Corrección integral en el manejo del foco de ventana y del lienzo para garantizar que tanto los atajos globales como los comandos internos (`Esc`, `Ctrl+C`, `Ctrl+S`, `Ctrl+Shift+P`, `Ctrl+Shift+E`, `Ctrl+P`, deshacer/rehacer y flechas) respondan de inmediato sin bloquear la pantalla tras un copiado rápido.
+- **Ciclo de captura limpio y optimizado:** Limpieza sincronizada del lienzo, selecciones y memoria temporal al cerrar o iniciar una captura para evitar por completo destellos momentáneos de trazos o capturas anteriores.
+- **Cambio rápido de modo en vuelo:** Presionar otro atajo de captura con el selector ya abierto cambia al instante entre modos sin encimar capturas.
+- **Permisos simplificados en macOS:** Pantalla de bienvenida de permisos depurada con un único botón directo y detección automática sin botones redundantes.
+- **Documentación renovada:** Guía visual actualizada con los íconos oficiales de cada herramienta y el historial completo de versiones.
+
+### `v1.0.1`
+- **Dos opciones de instalador para Windows:** Incorporación de la edición **Ligera** (descarga rápida) junto a la edición **Offline completa** para instalaciones sin conexión.
+- **Actualizaciones automáticas multiplataforma:** Integración del canal de publicación y actualización automática unificado para Windows y macOS.
+- **Ajustes visuales y de configuración:** Mejoras menores en los textos de interfaz, sección *Acerca de* y flujo inicial de configuración.
+
+### `v1.0.0`
+- **Lanzamiento inicial multiplataforma:** Primera versión pública para macOS y Windows concebida como una herramienta ágil en segundo plano de consumo mínimo.
+- **Cinco modos de captura:** Región libre, Copiado rápido sin edición intermedia, Recorte circular transparente, Detección de ventanas y Pantalla completa.
+- **Editor completo integrado:** Barra en L adaptable con trazos, flechas, formas, texto, pixelado, cuentagotas con lupa de píxeles, pasos numerados, imágenes superpuestas, sello de fecha/hora y fijado en pantalla.
+- **Personalización y bilingüismo:** Soporte completo en **Español** e **Inglés**, atajos configurables, inicio automático opcional y **Modo Ultra Liviano**.
 
 ---
 
