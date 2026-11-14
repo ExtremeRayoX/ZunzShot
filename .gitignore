@@ -6,3 +6,5 @@ src-tauri/target/
 *.zip
 .tauri/
 .DS_Store
+docs/*
+!docs/icons/
