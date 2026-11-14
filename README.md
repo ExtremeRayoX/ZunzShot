@@ -12,13 +12,13 @@
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot para Windows" width="284" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot para Windows" width="284" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot para macOS" width="284" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot para macOS" width="284" /></a>
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot Windows Offline" width="284" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe"><img src="docs/icons/download-windows-offline.svg" alt="Descargar ZunzShot Windows Offline" width="284" /></a>
 
 </div>
 
@@ -30,9 +30,9 @@ Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instal
 
 | Sistema | Plataforma | Descarga directa | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar instalador (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.3/ZunzShot_1.0.3_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (Ligero — recomendado)** | [Descargar instalador (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-setup.exe) | Instalador compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows Offline" /> | **Windows 10 / 11 (Offline completo)** | [Descargar offline (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_x64-offline-setup.exe) | Paquete autónomo para instalar sin conexión a internet, con todas las funciones incluidas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.4/ZunzShot_1.0.4_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -100,6 +100,12 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ---
 
 ## Notas de Versión
+
+### `v1.0.4`
+- **Instancia única y bandeja del sistema en Windows:** Prevención de procesos e íconos duplicados al abrir la aplicación cuando ya está en ejecución y corrección de respuesta al clic en la bandeja del sistema.
+- **Atajos globales y foco reforzados:** Detección de atajos reservados por el sistema operativo con aviso en ajustes, respaldo seguro al grabar combinaciones y refuerzo de foco del lienzo en Windows.
+- **Precisión multi-monitor y DPI mixto:** Posicionamiento y escalado exacto de notificaciones de copiado y capturas fijadas (`Pin`) entre monitores con distintas resoluciones o escalas, sin parpadeos iniciales.
+- **Estabilidad en Compartir, Imprimir y Guardado:** Ajuste automático del nivel de ventana para no cubrir diálogos del sistema en Windows y macOS, limpieza automática de archivos temporales y avisos claros ante cualquier error.
 
 ### `v1.0.3`
 - **Arreglo de atajos y foco en Windows:** Corrección de errores de foco de ventana y activación que impedían usar los atajos globales (`Ctrl+Shift+D/X/C/W/F`) y los comandos internos (`Esc`, `Ctrl+C`, `Ctrl+S`, `Ctrl+Shift+P`, `Ctrl+Shift+E`, `Ctrl+P`, deshacer/rehacer y flechas) en Windows.

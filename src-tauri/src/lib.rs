@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Position, Size, State,
     WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
@@ -27,6 +27,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_updater::UpdaterExt;
 
 static ALLOW_APP_EXIT: AtomicBool = AtomicBool::new(false);
+static SINGLE_INSTANCE_SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+const SINGLE_INSTANCE_ADDR: &str = "127.0.0.1:45893";
 static AUTO_UPDATE_CHECKED: AtomicBool = AtomicBool::new(false);
 static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static SHORTCUTS_PAUSED: AtomicBool = AtomicBool::new(false);
@@ -34,7 +36,16 @@ static SHORTCUT_OP_LOCK: std::sync::LazyLock<Mutex<()>> =
     std::sync::LazyLock::new(|| Mutex::new(()));
 static NEXT_PIN_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TOAST_ID: AtomicU64 = AtomicU64::new(1);
-static LAST_MONITOR_LOGICAL: Mutex<Option<(f64, f64, f64, f64)>> = Mutex::new(None);
+#[derive(Clone, Copy)]
+struct MonitorBounds {
+    phys_x: i32,
+    phys_y: i32,
+    phys_w: u32,
+    phys_h: u32,
+    scale: f64,
+}
+
+static LAST_MONITOR_BOUNDS: Mutex<Option<MonitorBounds>> = Mutex::new(None);
 
 struct CaptureInProgressGuard;
 
@@ -90,9 +101,74 @@ pub struct AppState {
     pub active_session: Option<CaptureSession>,
     pub tray: Option<TrayIcon>,
     pub shortcut_modes: HashMap<u32, String>,
+    pub failed_shortcuts: Vec<String>,
     pub pending_tab: Option<String>,
     pub pending_capture_error: Option<String>,
     pub pinned_images: HashMap<String, Vec<u8>>,
+}
+
+enum SingleInstanceOutcome {
+    Primary(Option<std::net::TcpListener>),
+    DuplicateSignaled,
+}
+
+fn acquire_single_instance_listener() -> SingleInstanceOutcome {
+    use std::io::{Read, Write};
+    use std::net::{SocketAddr, TcpListener, TcpStream};
+
+    let Ok(addr) = SINGLE_INSTANCE_ADDR.parse::<SocketAddr>() else {
+        return SingleInstanceOutcome::Primary(None);
+    };
+
+    for attempt in 0..8 {
+        if let Ok(listener) = TcpListener::bind(addr) {
+            return SingleInstanceOutcome::Primary(Some(listener));
+        }
+
+        if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(150)) {
+            let _ = stream.set_read_timeout(Some(Duration::from_millis(250)));
+            let _ = stream.set_write_timeout(Some(Duration::from_millis(150)));
+            if stream.write_all(b"ZUNZSHOT_WAKE").is_ok() {
+                let _ = stream.flush();
+                let mut buf = [0u8; 16];
+                if let Ok(n) = stream.read(&mut buf) {
+                    if &buf[..n] == b"ZUNZSHOT_OK" {
+                        return SingleInstanceOutcome::DuplicateSignaled;
+                    }
+                }
+            }
+        }
+
+        if attempt < 7 {
+            std::thread::sleep(Duration::from_millis(45));
+        }
+    }
+
+    SingleInstanceOutcome::Primary(None)
+}
+
+fn spawn_single_instance_responder(listener: std::net::TcpListener, app: AppHandle) {
+    use std::io::{Read, Write};
+
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            if SINGLE_INSTANCE_SHUTTING_DOWN.load(Ordering::SeqCst) {
+                break;
+            }
+            let mut stream = stream;
+            let _ = stream.set_read_timeout(Some(Duration::from_millis(200)));
+            let mut buf = [0u8; 32];
+            if let Ok(n) = stream.read(&mut buf) {
+                if &buf[..n] == b"ZUNZSHOT_WAKE"
+                    && !SINGLE_INSTANCE_SHUTTING_DOWN.load(Ordering::SeqCst)
+                {
+                    let _ = stream.write_all(b"ZUNZSHOT_OK");
+                    let _ = stream.flush();
+                    show_settings_window(&app);
+                }
+            }
+        }
+    });
 }
 
 fn has_screen_capture_permission() -> bool {
@@ -276,7 +352,7 @@ fn refresh_tray_menu(app: &AppHandle) {
     }
 }
 
-fn register_shortcuts(app: &AppHandle, settings: &AppSettings) {
+fn register_shortcuts(app: &AppHandle, settings: &AppSettings) -> Vec<String> {
     let _op_guard = SHORTCUT_OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
@@ -284,8 +360,11 @@ fn register_shortcuts(app: &AppHandle, settings: &AppSettings) {
 
     if !has_screen_capture_permission() {
         let state = app.state::<Mutex<AppState>>();
-        state.lock().unwrap().shortcut_modes.clear();
-        return;
+        let mut guard = state.lock().unwrap();
+        guard.shortcut_modes.clear();
+        guard.failed_shortcuts.clear();
+        let _ = app.emit("zunzshot://shortcuts-status", &Vec::<String>::new());
+        return Vec::new();
     }
 
     let pairs = [
@@ -297,24 +376,43 @@ fn register_shortcuts(app: &AppHandle, settings: &AppSettings) {
     ];
 
     let mut map = HashMap::new();
+    let mut failed = Vec::new();
     for (accel, mode) in pairs {
-        if accel.trim().is_empty() {
+        let trimmed = accel.trim();
+        if trimmed.is_empty() {
             continue;
         }
-        if let Ok(shortcut) = Shortcut::from_str(accel.trim()) {
-            let id = shortcut.id();
-            // Explicitly unregister per-hotkey before registering in case unregister_all aborted
-            // partway through on Windows, leaving a stale Win32 hotkey behind.
-            let _ = gs.unregister(shortcut);
-            if gs.register(shortcut).is_ok() {
-                map.insert(id, mode.to_string());
+        match Shortcut::from_str(trimmed) {
+            Ok(shortcut) => {
+                let id = shortcut.id();
+                // Explicitly unregister per-hotkey before registering in case unregister_all aborted
+                // partway through on Windows, leaving a stale Win32 hotkey behind.
+                let _ = gs.unregister(shortcut);
+                if gs.register(shortcut).is_ok() {
+                    map.insert(id, mode.to_string());
+                } else {
+                    failed.push(trimmed.to_string());
+                }
+            }
+            Err(_) => {
+                failed.push(trimmed.to_string());
             }
         }
     }
 
-    let state = app.state::<Mutex<AppState>>();
-    let mut guard = state.lock().unwrap();
-    guard.shortcut_modes = map;
+    {
+        let state = app.state::<Mutex<AppState>>();
+        let mut guard = state.lock().unwrap();
+        guard.shortcut_modes = map;
+        guard.failed_shortcuts = failed.clone();
+    }
+    let _ = app.emit("zunzshot://shortcuts-status", &failed);
+    failed
+}
+
+#[tauri::command]
+fn get_failed_shortcuts(state: State<'_, Mutex<AppState>>) -> Vec<String> {
+    state.lock().unwrap().failed_shortcuts.clone()
 }
 
 fn attach_main_close_handler(app: &AppHandle, win: &WebviewWindow) {
@@ -481,12 +579,13 @@ fn trigger_capture(app: AppHandle, mode: String) {
                 let phys_w = session.monitor_phys_w;
                 let phys_h = session.monitor_phys_h;
                 let sc = session.metadata.scale_factor.max(1.0);
-                *LAST_MONITOR_LOGICAL.lock().unwrap() = Some((
-                    phys_x as f64 / sc,
-                    phys_y as f64 / sc,
-                    session.metadata.logical_width.max(1.0),
-                    session.metadata.logical_height.max(1.0),
-                ));
+                *LAST_MONITOR_BOUNDS.lock().unwrap() = Some(MonitorBounds {
+                    phys_x,
+                    phys_y,
+                    phys_w,
+                    phys_h,
+                    scale: sc,
+                });
 
                 {
                     let state = app.state::<Mutex<AppState>>();
@@ -545,13 +644,23 @@ fn save_settings_cmd(
     }
 
     // Update shared state before disk I/O so any concurrent reader always sees latest settings.
-    let has_active_session = {
+    let (prev_settings, has_active_session) = {
         let mut guard = state.lock().unwrap();
+        let prev = guard.settings.clone();
         guard.settings = new_settings.clone();
-        guard.active_session.is_some()
+        (prev, guard.active_session.is_some())
     };
 
-    save_settings(&app, &new_settings)?;
+    if let Err(err) = save_settings(&app, &new_settings) {
+        {
+            let mut guard = state.lock().unwrap();
+            guard.settings = prev_settings.clone();
+        }
+        if SHORTCUTS_PAUSED.load(Ordering::SeqCst) {
+            register_shortcuts(&app, &prev_settings);
+        }
+        return Err(err);
+    }
 
     // Sync OS autostart preference
     let autostart = app.autolaunch();
@@ -681,6 +790,56 @@ fn get_capture_rgba(state: State<'_, Mutex<AppState>>) -> Result<Response, Strin
 static LAST_OVERLAY_RECT: std::sync::Mutex<Option<(i32, i32, u32, u32)>> =
     std::sync::Mutex::new(None);
 
+#[cfg(target_os = "macos")]
+fn matching_macos_screen_rect(
+    mtm: objc2::MainThreadMarker,
+    phys_x: i32,
+    phys_y: i32,
+    phys_w: u32,
+    phys_h: u32,
+    fallback_scale: f64,
+) -> objc2_foundation::NSRect {
+    use objc2_app_kit::NSScreen;
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+
+    let screens = NSScreen::screens(mtm);
+    let sc = fallback_scale.max(1.0);
+    let primary_h = if !screens.is_empty() {
+        screens.objectAtIndex(0).frame().size.height
+    } else {
+        phys_h as f64 / sc
+    };
+
+    let fallback_lx = phys_x as f64 / sc;
+    let fallback_ly = phys_y as f64 / sc;
+    let fallback_lw = phys_w as f64 / sc;
+    let fallback_lh = phys_h as f64 / sc;
+    let mut target_rect = NSRect::new(
+        NSPoint::new(fallback_lx, primary_h - (fallback_ly + fallback_lh)),
+        NSSize::new(fallback_lw, fallback_lh),
+    );
+
+    let count = screens.len();
+    let mut best_dist = f64::MAX;
+    for idx in 0..count {
+        let screen = screens.objectAtIndex(idx);
+        let sf = screen.frame();
+        let s_scale = screen.backingScaleFactor().max(1.0);
+        let size_match = ((sf.size.width * s_scale).round() - phys_w as f64).abs() <= 4.0
+            && ((sf.size.height * s_scale).round() - phys_h as f64).abs() <= 4.0;
+        let screen_top_y = primary_h - (sf.origin.y + sf.size.height);
+        let dx = sf.origin.x * s_scale - phys_x as f64;
+        let dy = screen_top_y * s_scale - phys_y as f64;
+        let dist = dx * dx + dy * dy;
+        if count == 1 || (size_match && dist < best_dist) {
+            best_dist = dist;
+            target_rect = sf;
+        }
+    }
+
+    target_rect
+}
+
 fn apply_native_overlay_window(
     ov: &tauri::WebviewWindow,
     phys_x: i32,
@@ -693,50 +852,16 @@ fn apply_native_overlay_window(
     #[cfg(target_os = "macos")]
     {
         use objc2::MainThreadMarker;
-        use objc2_app_kit::{NSApplication, NSScreen, NSWindow, NSWindowCollectionBehavior};
-        use objc2_foundation::{NSPoint, NSRect, NSSize};
+        use objc2_app_kit::{NSApplication, NSWindow, NSWindowCollectionBehavior};
 
         if let Some(mtm) = MainThreadMarker::new() {
             if let Ok(ns_win_ptr) = ov.ns_window() {
                 if !ns_win_ptr.is_null() {
                     let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
-                    let screens = NSScreen::screens(mtm);
-                    let primary_h = if !screens.is_empty() {
-                        screens.objectAtIndex(0).frame().size.height
-                    } else {
-                        ov.scale_factor().map(|s| phys_h as f64 / s).unwrap_or(900.0)
-                    };
-
-                    // Match the target physical bounds against Cocoa NSScreen frames so the
-                    // window covers 100% of the physical display edge-to-edge (above menu bar & dock).
                     let ov_scale = ov.scale_factor().unwrap_or(2.0).max(1.0);
-                    let fallback_lx = phys_x as f64 / ov_scale;
-                    let fallback_ly = phys_y as f64 / ov_scale;
-                    let fallback_lw = phys_w as f64 / ov_scale;
-                    let fallback_lh = phys_h as f64 / ov_scale;
-                    let mut target_rect = NSRect::new(
-                        NSPoint::new(fallback_lx, primary_h - (fallback_ly + fallback_lh)),
-                        NSSize::new(fallback_lw, fallback_lh),
+                    let target_rect = matching_macos_screen_rect(
+                        mtm, phys_x, phys_y, phys_w, phys_h, ov_scale,
                     );
-
-                    let count = screens.len();
-                    let mut best_dist = f64::MAX;
-                    for idx in 0..count {
-                        let screen = screens.objectAtIndex(idx);
-                        let sf = screen.frame();
-                        let s_scale = screen.backingScaleFactor().max(1.0);
-                        let size_match = ((sf.size.width * s_scale).round() - phys_w as f64).abs()
-                            <= 4.0
-                            && ((sf.size.height * s_scale).round() - phys_h as f64).abs() <= 4.0;
-                        let screen_top_y = primary_h - (sf.origin.y + sf.size.height);
-                        let dx = sf.origin.x * s_scale - phys_x as f64;
-                        let dy = screen_top_y * s_scale - phys_y as f64;
-                        let dist = dx * dx + dy * dy;
-                        if count == 1 || (size_match && dist < best_dist) {
-                            best_dist = dist;
-                            target_rect = sf;
-                        }
-                    }
 
                     let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
                         | NSWindowCollectionBehavior::FullScreenAuxiliary
@@ -818,14 +943,16 @@ fn apply_native_overlay_window(
                 let _ = ov.emit("zunzshot://focus-canvas", ());
                 let ov_delayed = ov.clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(35));
-                    let ov_main = ov_delayed.clone();
-                    let _ = ov_delayed.run_on_main_thread(move || {
-                        if ov_main.is_visible().unwrap_or(false) {
-                            force_windows_foreground_and_webview_focus(&ov_main);
-                            let _ = ov_main.emit("zunzshot://focus-canvas", ());
-                        }
-                    });
+                    for wait_ms in [35, 75] {
+                        std::thread::sleep(Duration::from_millis(wait_ms));
+                        let ov_main = ov_delayed.clone();
+                        let _ = ov_delayed.run_on_main_thread(move || {
+                            if ov_main.is_visible().unwrap_or(false) {
+                                force_windows_foreground_and_webview_focus(&ov_main);
+                                let _ = ov_main.emit("zunzshot://focus-canvas", ());
+                            }
+                        });
+                    }
                 });
             }
             if emit_ready {
@@ -878,6 +1005,24 @@ fn set_overlay_elevated(app: AppHandle, elevated: bool) {
             present_overlay_window(&app, rect, elevated, false);
         }
     }
+}
+
+#[tauri::command]
+fn focus_overlay_window(app: AppHandle) {
+    let app_handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(ov) = app_handle.get_webview_window("overlay") {
+            if ov.is_visible().unwrap_or(false) {
+                #[cfg(target_os = "windows")]
+                force_windows_foreground_and_webview_focus(&ov);
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = ov.set_focus();
+                    let _ = AsRef::<tauri::Webview<_>>::as_ref(&ov).set_focus();
+                }
+            }
+        }
+    });
 }
 
 fn hide_overlay_on_main_thread(app_handle: &AppHandle, pin_ids: &[String], destroy_ov: bool) {
@@ -1043,13 +1188,16 @@ fn show_copy_notification(
     close_overlay: Option<bool>,
 ) {
     let should_close = close_overlay.unwrap_or(false);
-    let pin_ids: Vec<String> = if should_close {
+    let (ultra_light, pin_ids): (bool, Vec<String>) = if should_close {
         *LAST_OVERLAY_RECT.lock().unwrap() = None;
         let mut guard = state.lock().unwrap();
         guard.active_session = None;
-        guard.pinned_images.keys().cloned().collect()
+        (
+            guard.settings.ultra_light_mode,
+            guard.pinned_images.keys().cloned().collect(),
+        )
     } else {
-        Vec::new()
+        (false, Vec::new())
     };
 
     let gen = NEXT_TOAST_ID.fetch_add(1, Ordering::Relaxed);
@@ -1060,14 +1208,23 @@ fn show_copy_notification(
         None
     };
 
-    let (mon_x, mon_y, mon_w, _mon_h) = LAST_MONITOR_LOGICAL
-        .lock()
-        .unwrap()
-        .unwrap_or((0.0, 0.0, 1440.0, 900.0));
+    let bounds = LAST_MONITOR_BOUNDS.lock().unwrap().unwrap_or(MonitorBounds {
+        phys_x: 0,
+        phys_y: 0,
+        phys_w: 1440,
+        phys_h: 900,
+        scale: 1.0,
+    });
+    let mon_phys_x = bounds.phys_x;
+    let mon_phys_y = bounds.phys_y;
+    let mon_phys_w = bounds.phys_w;
+    let mon_phys_h = bounds.phys_h;
+    let sc = bounds.scale.max(1.0);
+    let mon_w = (mon_phys_w as f64 / sc).max(1.0);
     let toast_w = 320.0;
     let toast_h = 62.0;
-    let toast_x = mon_x + ((mon_w - toast_w) / 2.0).max(0.0);
-    let toast_y = mon_y + 38.0;
+    let toast_x = mon_phys_x as f64 / sc + ((mon_w - toast_w) / 2.0).max(0.0);
+    let toast_y = mon_phys_y as f64 / sc + 38.0;
 
     let url = format!(
         "toast.html?title={}&sub={}",
@@ -1078,10 +1235,11 @@ fn show_copy_notification(
     let app_handle = app.clone();
     let id_for_create = toast_id.clone();
     let _ = app.run_on_main_thread(move || {
+        let _ = (mon_phys_h, mon_phys_w, sc, toast_w, toast_h);
         // Hide the fullscreen overlay BEFORE creating the toast window so the desktop
         // becomes responsive immediately on Windows even before WebView2 initializes the toast.
         if should_close {
-            hide_overlay_on_main_thread(&app_handle, &pin_ids, false);
+            hide_overlay_on_main_thread(&app_handle, &pin_ids, ultra_light);
         }
         if let Some(old_id) = prev_id {
             if let Some(old_win) = app_handle.get_webview_window(&old_id) {
@@ -1101,27 +1259,37 @@ fn show_copy_notification(
                 .focused(false)
                 .inner_size(toast_w, toast_h)
                 .position(toast_x, toast_y)
-                .visible(true)
+                .visible(false)
                 .build()
         {
             let _ = win.set_ignore_cursor_events(true);
 
             #[cfg(target_os = "macos")]
             {
+                use objc2::MainThreadMarker;
                 use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+                use objc2_foundation::NSPoint;
 
-                if let Ok(ns_win_ptr) = win.ns_window() {
-                    if !ns_win_ptr.is_null() {
-                        let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
-                        ns_win.setHidesOnDeactivate(false);
-                        ns_win.setIgnoresMouseEvents(true);
-                        ns_win.setCollectionBehavior(
-                            NSWindowCollectionBehavior::CanJoinAllSpaces
-                                | NSWindowCollectionBehavior::FullScreenAuxiliary
-                                | NSWindowCollectionBehavior::IgnoresCycle,
-                        );
-                        ns_win.setLevel(1000);
-                        ns_win.orderFrontRegardless();
+                if let Some(mtm) = MainThreadMarker::new() {
+                    let sf = matching_macos_screen_rect(
+                        mtm, mon_phys_x, mon_phys_y, mon_phys_w, mon_phys_h, sc,
+                    );
+                    if let Ok(ns_win_ptr) = win.ns_window() {
+                        if !ns_win_ptr.is_null() {
+                            let ns_win = unsafe { &*(ns_win_ptr as *const NSWindow) };
+                            let cocoa_x = sf.origin.x + ((sf.size.width - toast_w) / 2.0).max(0.0);
+                            let cocoa_y = sf.origin.y + sf.size.height - 38.0 - toast_h;
+                            ns_win.setFrameOrigin(NSPoint::new(cocoa_x, cocoa_y));
+                            ns_win.setHidesOnDeactivate(false);
+                            ns_win.setIgnoresMouseEvents(true);
+                            ns_win.setCollectionBehavior(
+                                NSWindowCollectionBehavior::CanJoinAllSpaces
+                                    | NSWindowCollectionBehavior::FullScreenAuxiliary
+                                    | NSWindowCollectionBehavior::IgnoresCycle,
+                            );
+                            ns_win.setLevel(1000);
+                            ns_win.orderFrontRegardless();
+                        }
                     }
                 }
             }
@@ -1130,24 +1298,33 @@ fn show_copy_notification(
             {
                 use windows::Win32::Foundation::HWND;
                 use windows::Win32::UI::WindowsAndMessaging::{
-                    SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-                    SWP_SHOWWINDOW,
+                    SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
                 };
 
+                let phys_toast_x = mon_phys_x
+                    + (((mon_phys_w as f64 - toast_w * sc) / 2.0).max(0.0)).round() as i32;
+                let phys_toast_y = mon_phys_y + (38.0 * sc).round() as i32;
+                let phys_toast_w = (toast_w * sc).round().max(1.0) as i32;
+                let phys_toast_h = (toast_h * sc).round().max(1.0) as i32;
                 if let Ok(hwnd) = win.hwnd() {
                     let hwnd = HWND(hwnd.0);
                     unsafe {
                         let _ = SetWindowPos(
                             hwnd,
                             Some(HWND_TOPMOST),
-                            0,
-                            0,
-                            0,
-                            0,
-                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                            phys_toast_x,
+                            phys_toast_y,
+                            phys_toast_w,
+                            phys_toast_h,
+                            SWP_NOACTIVATE | SWP_SHOWWINDOW,
                         );
                     }
                 }
+            }
+
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                let _ = win.show();
             }
 
             let app_for_close = app_handle.clone();
@@ -1242,6 +1419,28 @@ fn write_temp_png(png_bytes: &[u8], prefix: &str) -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join("ZunzShot");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("Could not prepare temp folder: {e}"))?;
+    } else if let Ok(entries) = fs::read_dir(&dir) {
+        let max_age = Duration::from_secs(600);
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let is_png = p
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("png"))
+                .unwrap_or(false);
+            if is_png {
+                let stale = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.elapsed().ok())
+                    .map(|age| age > max_age)
+                    .unwrap_or(false);
+                if stale {
+                    let _ = fs::remove_file(p);
+                }
+            }
+        }
     }
     let path = dir.join(format!("{prefix}_{stamp}.png"));
     fs::write(&path, png_bytes).map_err(|e| format!("Failed writing temp PNG: {e}"))?;
@@ -1330,11 +1529,15 @@ fn share_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        let _ = (app, anchor_x, anchor_y, anchor_w, anchor_h);
+        let _ = (anchor_x, anchor_y, anchor_w, anchor_h);
+        if let Some(rect) = *LAST_OVERLAY_RECT.lock().unwrap() {
+            present_overlay_window(&app, rect, false, false);
+        }
         let arg = format!("/select,{}", temp_path.to_string_lossy());
-        let _ = std::process::Command::new("explorer")
+        std::process::Command::new("explorer")
             .arg(arg)
-            .spawn();
+            .spawn()
+            .map_err(|e| format!("Failed opening File Explorer: {e}"))?;
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -1422,6 +1625,9 @@ fn print_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        if let Some(rect) = *LAST_OVERLAY_RECT.lock().unwrap() {
+            present_overlay_window(&app, rect, false, false);
+        }
         let app_handle = app.clone();
         std::thread::spawn(move || {
             let escaped = temp_path.to_string_lossy().replace('\'', "''");
@@ -1435,7 +1641,14 @@ fn print_image(app: AppHandle, request: Request<'_>) -> Result<(), String> {
                 ])
                 .status();
             let ok = status.map(|s| s.success()).unwrap_or(false);
+            if !ok {
+                if let Some(rect) = *LAST_OVERLAY_RECT.lock().unwrap() {
+                    present_overlay_window(&app_handle, rect, true, false);
+                }
+            }
             let _ = app_handle.emit("zunzshot://print-result", ok);
+            std::thread::sleep(Duration::from_secs(60));
+            let _ = fs::remove_file(&temp_path);
         });
     }
 
@@ -1473,28 +1686,28 @@ fn pin_capture(
     let sel_h = parse_f64("x-pin-h", 200.0).max(48.0);
 
     let pin_id = format!("pin-{}", NEXT_PIN_ID.fetch_add(1, Ordering::Relaxed));
-    let (lang, mon_x, mon_y, mon_w, mon_h) = {
+    let (lang, mon_phys_x, mon_phys_y, mon_w, mon_h, sc) = {
         let mut guard = state.lock().unwrap();
         guard.pinned_images.insert(pin_id.clone(), png_bytes.to_vec());
-        let (mx, my, mw, mh) = match guard.active_session.as_ref() {
-            Some(s) => {
-                let sc = s.metadata.scale_factor.max(1.0);
-                (
-                    s.monitor_phys_x as f64 / sc,
-                    s.monitor_phys_y as f64 / sc,
-                    s.metadata.logical_width.max(1.0),
-                    s.metadata.logical_height.max(1.0),
-                )
-            }
-            None => (0.0, 0.0, 1440.0, 900.0),
+        let (mx, my, mw, mh, scale) = match guard.active_session.as_ref() {
+            Some(s) => (
+                s.monitor_phys_x,
+                s.monitor_phys_y,
+                s.metadata.logical_width.max(1.0),
+                s.metadata.logical_height.max(1.0),
+                s.metadata.scale_factor.max(1.0),
+            ),
+            None => (0, 0, 1440.0, 900.0, 1.0),
         };
-        (guard.settings.language.clone(), mx, my, mw, mh)
+        (guard.settings.language.clone(), mx, my, mw, mh, scale)
     };
 
     let w = sel_w.min(mon_w);
     let h = sel_h.min(mon_h);
-    let fallback_x = mon_x + sel_x.clamp(0.0, (mon_w - w).max(0.0));
-    let fallback_y = mon_y + sel_y.clamp(0.0, (mon_h - h).max(0.0));
+    let clamped_x = sel_x.clamp(0.0, (mon_w - w).max(0.0));
+    let clamped_y = sel_y.clamp(0.0, (mon_h - h).max(0.0));
+    let fallback_x = mon_phys_x as f64 / sc + clamped_x;
+    let fallback_y = mon_phys_y as f64 / sc + clamped_y;
 
     let app_handle = app.clone();
     let id_for_win = pin_id.clone();
@@ -1564,7 +1777,7 @@ fn pin_capture(
             .inner_size(win_w, win_h)
             .min_inner_size(64.0, 48.0)
             .position(top_left_x, top_left_y)
-            .visible(true)
+            .visible(false)
             .build()
         {
             Ok(win) => {
@@ -1586,9 +1799,28 @@ fn pin_capture(
                             if let Some(frame) = cocoa_frame_opt {
                                 ns_win.setFrame_display(frame, true);
                             }
+                            let _ = win.show();
                             ns_win.orderFrontRegardless();
                         }
                     }
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    let phys_pin_x = mon_phys_x + (clamped_x * sc).round() as i32;
+                    let phys_pin_y = mon_phys_y + (clamped_y * sc).round() as i32;
+                    let phys_pin_w = (w * sc).round().max(64.0) as u32;
+                    let phys_pin_h = (h * sc).round().max(48.0) as u32;
+                    let _ = win.set_position(Position::Physical(PhysicalPosition::new(
+                        phys_pin_x, phys_pin_y,
+                    )));
+                    let _ = win.set_size(Size::Physical(PhysicalSize::new(
+                        phys_pin_w, phys_pin_h,
+                    )));
+                    let _ = win.show();
+                }
+                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                {
+                    let _ = win.show();
                 }
                 let app_for_destroy = app_handle.clone();
                 let id_for_destroy = id_for_win.clone();
@@ -1692,6 +1924,7 @@ fn request_screen_capture_permission(app: AppHandle) -> Result<bool, String> {
 
 #[tauri::command]
 fn restart_app(app: AppHandle) {
+    SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
     ALLOW_APP_EXIT.store(true, Ordering::Relaxed);
     app.restart();
 }
@@ -1748,6 +1981,7 @@ fn maybe_spawn_auto_update(app: &AppHandle, delay_secs: u64) {
                 .and_then(|s| s.lock().ok().map(|g| g.active_session.is_some()))
                 .unwrap_or(false);
             if !capture_active {
+                SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
                 ALLOW_APP_EXIT.store(true, Ordering::Relaxed);
                 handle.restart();
             }
@@ -1773,6 +2007,11 @@ fn get_platform() -> &'static str {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let single_instance_listener = match acquire_single_instance_listener() {
+        SingleInstanceOutcome::DuplicateSignaled => return,
+        SingleInstanceOutcome::Primary(listener) => listener,
+    };
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -1803,10 +2042,12 @@ pub fn run() {
             set_language_cmd,
             complete_onboarding_cmd,
             set_shortcuts_paused,
+            get_failed_shortcuts,
             start_capture,
             get_capture_metadata,
             get_capture_rgba,
             set_overlay_elevated,
+            focus_overlay_window,
             close_overlay,
             copy_image_to_clipboard,
             copy_text_to_clipboard,
@@ -1827,7 +2068,11 @@ pub fn run() {
             get_platform,
             get_app_version,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            if let Some(listener) = single_instance_listener {
+                spawn_single_instance_responder(listener, app.handle().clone());
+            }
+
             #[cfg(target_os = "macos")]
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -1846,6 +2091,7 @@ pub fn run() {
                 active_session: None,
                 tray: None,
                 shortcut_modes: HashMap::new(),
+                failed_shortcuts: Vec::new(),
                 pending_tab: None,
                 pending_capture_error: None,
                 pinned_images: HashMap::new(),
@@ -1866,6 +2112,7 @@ pub fn run() {
                 .on_menu_event(|app, event| {
                     let id = event.id().as_ref();
                     if id == "quit" {
+                        SINGLE_INSTANCE_SHUTTING_DOWN.store(true, Ordering::SeqCst);
                         ALLOW_APP_EXIT.store(true, Ordering::Relaxed);
                         app.exit(0);
                         return;
@@ -1890,17 +2137,6 @@ pub fn run() {
                         "about" => open_settings_tab(app, "about"),
                         _ => {}
                     }
-                })
-                .on_tray_icon_event(|_tray, event| {
-                    if let TrayIconEvent::DoubleClick {
-                        button: MouseButton::Left,
-                        ..
-                    } = event
-                    {
-                        // Double click tray opens region capture quickly on Windows
-                        trigger_capture(_tray.app_handle().clone(), "region".to_string());
-                    }
-                    let _ = MouseButtonState::Up;
                 });
 
             #[cfg(target_os = "macos")]

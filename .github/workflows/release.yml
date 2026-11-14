@@ -61,10 +61,10 @@ jobs:
             - **Windows (Instalador offline completo):** `ZunzShot___VERSION___x64-offline-setup.exe`
 
             ### Mejoras y correcciones incluidas
-            - Corrección del foco de ventana y respuesta de atajos globales y comandos dentro del lienzo en Windows.
-            - Eliminación de destellos de trazos previos al iniciar nuevas capturas mediante limpieza sincronizada del lienzo y memoria.
-            - Cambio directo de modo al usar atajos de captura con el selector ya abierto.
-            - Descarga directa por sistema operativo desde el README.
+            - Control de instancia única en segundo plano y corrección de clic en el ícono de bandeja en Windows.
+            - Detección de conflictos de atajos con el sistema operativo, guardado seguro de combinaciones y foco reforzado en el lienzo.
+            - Posicionamiento y tamaño exacto en configuraciones multi-monitor con DPI mixto para avisos de copiado y capturas fijadas (Pin).
+            - Manejo mejorado de nivel de ventana y limpieza de archivos temporales al compartir, imprimir y guardar.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

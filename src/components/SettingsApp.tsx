@@ -36,6 +36,7 @@ import {
   DEFAULT_GLOBAL_SHORTCUTS,
   DEFAULT_OVERLAY_COMMANDS,
   formatKeyLabel,
+  formatShortcutBadge,
   getEventModifiers,
   isModifierKeyEvent,
   normalizeAccelerator,
@@ -81,10 +82,11 @@ export const SettingsApp: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.0.2");
+  const [appVersion, setAppVersion] = useState<string>("1.0.4");
   const [tab, setTab] = useState<TabId>("capture");
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<
     "idle" | "checking" | "up-to-date" | "available" | "downloading" | "installing" | "error"
   >("idle");
@@ -95,7 +97,10 @@ export const SettingsApp: React.FC = () => {
   const [recordingField, setRecordingField] = useState<ShortcutFieldKey | null>(null);
   const [liveTokens, setLiveTokens] = useState<string[]>([]);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [failedShortcuts, setFailedShortcuts] = useState<string[]>([]);
   const shortcutSavedRef = useRef<boolean>(false);
+  const settingsRef = useRef<AppSettings | null>(null);
+  settingsRef.current = settings;
 
   useEffect(() => {
     return () => {
@@ -168,6 +173,9 @@ export const SettingsApp: React.FC = () => {
     void invoke<string>("get_platform").then(setPlatform);
     void invoke<boolean>("check_screen_capture_permission").then(setHasPermission);
     void invoke<string>("get_app_version").then(setAppVersion);
+    void invoke<string[]>("get_failed_shortcuts")
+      .then(setFailedShortcuts)
+      .catch(() => {});
     void invoke<string | null>("consume_pending_capture_error").then((err) => {
       if (err) setCaptureError(err);
     });
@@ -196,6 +204,12 @@ export const SettingsApp: React.FC = () => {
         setSettings(ev.payload);
       }
     );
+    const unlistenShortcuts = listen<string[]>(
+      "zunzshot://shortcuts-status",
+      (ev) => {
+        setFailedShortcuts(ev.payload);
+      }
+    );
     const unlistenTab = listen<string>("zunzshot://open-tab", (ev) => {
       if (ev.payload === "about") {
         setTab("about");
@@ -213,6 +227,7 @@ export const SettingsApp: React.FC = () => {
       void unlistenErr.then((fn) => fn());
       void unlistenPerm.then((fn) => fn());
       void unlistenUpd.then((fn) => fn());
+      void unlistenShortcuts.then((fn) => fn());
       void unlistenTab.then((fn) => fn());
     };
   }, []);
@@ -234,10 +249,12 @@ export const SettingsApp: React.FC = () => {
   const lang: Language = settings?.language ?? "es";
   const t = useMemo(() => getTranslations(lang), [lang]);
 
+  const hasSettings = Boolean(settings);
+
   // Pause global hotkeys while recording so pressed combos don't trigger screenshots,
   // and mark keys live as they are pressed down.
   useEffect(() => {
-    if (!recordingField || tab !== "shortcuts" || !settings) {
+    if (!recordingField || tab !== "shortcuts" || !hasSettings) {
       return;
     }
 
@@ -251,11 +268,14 @@ export const SettingsApp: React.FC = () => {
       e.preventDefault();
       e.stopPropagation();
 
+      const currentSettings = settingsRef.current;
+      if (!currentSettings) return;
+
       const mods = getEventModifiers(e, platform);
 
       // Esc alone cancels recording (unless explicitly re-assigning Escape to cmdCancel)
       const allowEscapeBind =
-        recordingField === "cmdCancel" && settings.cmdCancel !== "Escape";
+        recordingField === "cmdCancel" && currentSettings.cmdCancel !== "Escape";
       if (e.code === "Escape" && mods.length === 0 && !allowEscapeBind) {
         setRecordingField(null);
         setLiveTokens([]);
@@ -296,7 +316,7 @@ export const SettingsApp: React.FC = () => {
       const hasConflict = groupFields.some(
         (f) =>
           f !== recordingField &&
-          normalizeAccelerator(settings[f], platform) === nextNorm
+          normalizeAccelerator(currentSettings[f], platform) === nextNorm
       );
       if (hasConflict) {
         setShortcutError(
@@ -305,18 +325,22 @@ export const SettingsApp: React.FC = () => {
         return;
       }
 
-      const updated: AppSettings = { ...settings, [recordingField]: nextCombo };
+      const updated: AppSettings = { ...currentSettings, [recordingField]: nextCombo };
       shortcutSavedRef.current = true;
       setRecordingField(null);
       setLiveTokens([]);
       setShortcutError(null);
-      void invoke<AppSettings>("save_settings_cmd", { newSettings: updated }).then(
-        (saved) => {
+      void invoke<AppSettings>("save_settings_cmd", { newSettings: updated })
+        .then((saved) => {
           setSettings(saved);
           setSavedBanner(true);
           window.setTimeout(() => setSavedBanner(false), 1800);
-        }
-      );
+        })
+        .catch((err) => {
+          shortcutSavedRef.current = false;
+          setShortcutError(err instanceof Error ? err.message : String(err ?? ""));
+          void invoke("set_shortcuts_paused", { paused: false });
+        });
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -340,7 +364,7 @@ export const SettingsApp: React.FC = () => {
         void invoke("set_shortcuts_paused", { paused: false });
       }
     };
-  }, [recordingField, tab, settings, platform, t]);
+  }, [recordingField, tab, hasSettings, platform, t]);
 
   useEffect(() => {
     if (tab !== "shortcuts" && recordingField) {
@@ -355,30 +379,46 @@ export const SettingsApp: React.FC = () => {
   }
 
   const handleLanguageChange = async (newLang: Language) => {
-    const updated = await invoke<AppSettings>("set_language_cmd", {
-      language: newLang,
-    });
-    setSettings(updated);
+    setSaveError(null);
+    try {
+      const updated = await invoke<AppSettings>("set_language_cmd", {
+        language: newLang,
+      });
+      setSettings(updated);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err ?? ""));
+    }
   };
 
   const handleCompleteOnboarding = async (
     language: Language | null,
     autoCheckUpdates: boolean
   ) => {
-    const updated = await invoke<AppSettings>("complete_onboarding_cmd", {
-      language,
-      autoCheckUpdates,
-    });
-    setSettings(updated);
+    setSaveError(null);
+    try {
+      const updated = await invoke<AppSettings>("complete_onboarding_cmd", {
+        language,
+        autoCheckUpdates,
+      });
+      setSettings(updated);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err ?? ""));
+    }
   };
 
   const handleSaveSettings = async (next: AppSettings) => {
-    const saved = await invoke<AppSettings>("save_settings_cmd", {
-      newSettings: next,
-    });
-    setSettings(saved);
-    setSavedBanner(true);
-    setTimeout(() => setSavedBanner(false), 1800);
+    setSaveError(null);
+    setShortcutError(null);
+    try {
+      const saved = await invoke<AppSettings>("save_settings_cmd", {
+        newSettings: next,
+      });
+      setSettings(saved);
+      setSavedBanner(true);
+      setTimeout(() => setSavedBanner(false), 1800);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err ?? ""));
+    }
   };
 
   const handlePickFolder = async () => {
@@ -394,7 +434,11 @@ export const SettingsApp: React.FC = () => {
 
   const triggerCapture = async (mode: CaptureMode) => {
     setCaptureError(null);
-    await invoke("start_capture", { mode });
+    try {
+      await invoke("start_capture", { mode });
+    } catch (err) {
+      setCaptureError(err instanceof Error ? err.message : String(err ?? ""));
+    }
   };
 
   const renderShortcutCard = (
@@ -625,6 +669,18 @@ export const SettingsApp: React.FC = () => {
               <ShieldCheck size={14} /> {t.openPermBtn}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Save Error Banner across all configuration tabs */}
+      {saveError && (
+        <div className="error-banner">
+          <div className="error-text">
+            <AlertTriangle size={18} />
+            <div>
+              <p>{saveError}</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -887,13 +943,16 @@ export const SettingsApp: React.FC = () => {
                   <h3 className="shortcuts-section-title">{t.shortcutsTitle}</h3>
                   <button
                     className="secondary-btn"
-                    onClick={() =>
+                    onClick={() => {
+                      setRecordingField(null);
+                      setLiveTokens([]);
+                      setShortcutError(null);
                       void handleSaveSettings({
                         ...settings,
                         ...DEFAULT_GLOBAL_SHORTCUTS,
                         ...DEFAULT_OVERLAY_COMMANDS,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <RotateCcw size={12} /> {t.shortcutResetDefaultsBtn}
                   </button>
@@ -941,6 +1000,18 @@ export const SettingsApp: React.FC = () => {
                 <div className="permission-warn-note">
                   <AlertTriangle size={14} />
                   <span>{shortcutError}</span>
+                </div>
+              )}
+
+              {failedShortcuts.length > 0 && (
+                <div className="permission-warn-note">
+                  <AlertTriangle size={14} />
+                  <span>
+                    {t.shortcutOsConflictWarn}{" "}
+                    {failedShortcuts
+                      .map((s) => formatShortcutBadge(s, platform))
+                      .join(", ")}
+                  </span>
                 </div>
               )}
             </div>

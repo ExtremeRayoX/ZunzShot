@@ -249,6 +249,7 @@ export const OverlayApp: React.FC = () => {
   const activeSessionTokenRef = useRef<number>(0);
   const copyInFlightRef = useRef<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
+  const shareRestoreCleanupRef = useRef<(() => void) | null>(null);
   const viewportRef = useRef<{ w: number; h: number }>({
     w: window.innerWidth,
     h: window.innerHeight,
@@ -467,6 +468,10 @@ export const OverlayApp: React.FC = () => {
   }, []);
 
   const resetOverlayState = useCallback(() => {
+    if (shareRestoreCleanupRef.current) {
+      shareRestoreCleanupRef.current();
+      shareRestoreCleanupRef.current = null;
+    }
     sessionOpenRef.current = false;
     copyInFlightRef.current = false;
     setSessionReady(false);
@@ -556,6 +561,7 @@ export const OverlayApp: React.FC = () => {
       }
 
       setSessionReady(true);
+      void invoke("focus_overlay_window").catch(() => {});
       window.requestAnimationFrame(() => {
         focusOverlayCanvas();
         window.setTimeout(focusOverlayCanvas, 40);
@@ -995,12 +1001,13 @@ export const OverlayApp: React.FC = () => {
         const subtitle = activeSel
           ? `${Math.round(activeSel.w)} × ${Math.round(activeSel.h)} px`
           : "";
+        activeSessionTokenRef.current += 1;
+        resetOverlayState();
         await invoke("show_copy_notification", {
           title: t.overlay.copiedMsg,
           subtitle,
           closeOverlay: true,
-        }).catch(() => {});
-        await handleClose();
+        }).catch(() => invoke("close_overlay").catch(() => {}));
       } catch (err) {
         console.error("Failed copying screenshot:", err);
         if (!sessionOpenRef.current) return;
@@ -1024,11 +1031,20 @@ export const OverlayApp: React.FC = () => {
       captureMode,
       updateSelection,
       t.overlay.copiedMsg,
-      handleClose,
+      resetOverlayState,
       showToastMsg,
       lang,
     ]
   );
+
+  const restoreOverlayElevation = useCallback(() => {
+    if (!sessionOpenRef.current) return;
+    window.setTimeout(() => {
+      if (sessionOpenRef.current) {
+        void invoke("set_overlay_elevated", { elevated: true });
+      }
+    }, 80);
+  }, []);
 
   const handleSave = useCallback(async () => {
     const bytes = await exportCurrentPng();
@@ -1060,17 +1076,31 @@ export const OverlayApp: React.FC = () => {
     }
 
     if (!picked) return;
-    await invoke<string>("save_image_to_disk", bytes, {
-      headers: {
-        "x-custom-path-hex": encodeUtf8Hex(picked),
-      },
-    });
+    try {
+      await invoke<string>("save_image_to_disk", bytes, {
+        headers: {
+          "x-custom-path-hex": encodeUtf8Hex(picked),
+        },
+      });
+    } catch {
+      showToastMsg(t.overlay.saveErrorMsg, true, 2800);
+      return;
+    }
     showToastMsg(`${t.overlay.savedMsg} ${picked.split(/[\\/]/).pop()}`, false, 0);
     setTimeout(() => {
       setToast(null);
       void handleClose();
     }, 520);
-  }, [exportCurrentPng, selection?.shape, settings?.outputFormat, settings?.saveFolder, t.overlay.savedMsg, handleClose, showToastMsg]);
+  }, [
+    exportCurrentPng,
+    selection?.shape,
+    settings?.outputFormat,
+    settings?.saveFolder,
+    t.overlay.savedMsg,
+    t.overlay.saveErrorMsg,
+    handleClose,
+    showToastMsg,
+  ]);
 
   const handleShare = useCallback(
     async (anchorRect?: DOMRect) => {
@@ -1091,21 +1121,52 @@ export const OverlayApp: React.FC = () => {
               }
             : undefined
         );
+        if (runtimePlatform === "macos") {
+          shareRestoreCleanupRef.current?.();
+          const cleanup = () => {
+            window.removeEventListener("focus", onReturn);
+            window.removeEventListener("pointerdown", onReturn);
+            if (shareRestoreCleanupRef.current === cleanup) {
+              shareRestoreCleanupRef.current = null;
+            }
+          };
+          const onReturn = () => {
+            cleanup();
+            restoreOverlayElevation();
+          };
+          shareRestoreCleanupRef.current = cleanup;
+          window.addEventListener("focus", onReturn, { once: true });
+          window.addEventListener("pointerdown", onReturn, { once: true });
+        } else if (runtimePlatform === "windows") {
+          await handleClose();
+        }
       } catch {
+        if (sessionOpenRef.current) {
+          await invoke("set_overlay_elevated", { elevated: true }).catch(() => {});
+        }
         showToastMsg(t.overlay.shareErrorMsg, true, 2400);
       }
     },
-    [exportCurrentPng, showToastMsg, t.overlay.shareErrorMsg]
+    [
+      exportCurrentPng,
+      runtimePlatform,
+      restoreOverlayElevation,
+      handleClose,
+      showToastMsg,
+      t.overlay.shareErrorMsg,
+    ]
   );
 
   const handlePrint = useCallback(async () => {
     const bytes = await exportCurrentPng();
     if (!bytes) return;
     let unlistenFn: (() => void) | null = null;
+    let timeoutId: number | null = null;
     try {
       let resolvePrint!: (ok: boolean) => void;
       const donePromise = new Promise<boolean>((resolve) => {
         resolvePrint = resolve;
+        timeoutId = window.setTimeout(() => resolve(false), 45000);
       });
       unlistenFn = await listen<boolean>("zunzshot://print-result", (ev) => {
         resolvePrint(Boolean(ev.payload));
@@ -1118,15 +1179,29 @@ export const OverlayApp: React.FC = () => {
           setToast(null);
           void handleClose();
         }, 420);
+      } else if (sessionOpenRef.current) {
+        await invoke("set_overlay_elevated", { elevated: true }).catch(() => {});
+        if (runtimePlatform === "windows") {
+          showToastMsg(t.overlay.printErrorMsg, true, 2800);
+        }
       }
     } catch {
       if (sessionOpenRef.current) {
-        await invoke("set_overlay_elevated", { elevated: true });
+        await invoke("set_overlay_elevated", { elevated: true }).catch(() => {});
+        showToastMsg(t.overlay.printErrorMsg, true, 2800);
       }
     } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
       unlistenFn?.();
     }
-  }, [exportCurrentPng, handleClose, showToastMsg, t.overlay.printedMsg]);
+  }, [
+    exportCurrentPng,
+    handleClose,
+    runtimePlatform,
+    showToastMsg,
+    t.overlay.printedMsg,
+    t.overlay.printErrorMsg,
+  ]);
 
   const handlePin = useCallback(async () => {
     if (!selection) return;
@@ -1136,29 +1211,32 @@ export const OverlayApp: React.FC = () => {
     const pinY = Math.round(selection.y);
     const pinW = Math.max(64, Math.round(selection.w));
     const pinH = Math.max(48, Math.round(selection.h));
-    await invoke<string>("pin_capture", bytes, {
-      headers: {
-        "x-pin-x": String(pinX),
-        "x-pin-y": String(pinY),
-        "x-pin-w": String(pinW),
-        "x-pin-h": String(pinH),
-      },
-    });
+    try {
+      await invoke<string>("pin_capture", bytes, {
+        headers: {
+          "x-pin-x": String(pinX),
+          "x-pin-y": String(pinY),
+          "x-pin-w": String(pinW),
+          "x-pin-h": String(pinH),
+        },
+      });
+    } catch {
+      showToastMsg(t.overlay.pinErrorMsg, true, 2600);
+      return;
+    }
     showToastMsg(t.overlay.pinnedMsg, false, 0);
     setTimeout(() => {
       setToast(null);
       void handleClose();
     }, 220);
-  }, [selection, exportCurrentPng, showToastMsg, t.overlay.pinnedMsg, handleClose]);
-
-  const restoreOverlayElevation = useCallback(() => {
-    if (!sessionOpenRef.current) return;
-    window.setTimeout(() => {
-      if (sessionOpenRef.current) {
-        void invoke("set_overlay_elevated", { elevated: true });
-      }
-    }, 80);
-  }, []);
+  }, [
+    selection,
+    exportCurrentPng,
+    showToastMsg,
+    t.overlay.pinnedMsg,
+    t.overlay.pinErrorMsg,
+    handleClose,
+  ]);
 
   const handlePickPhoto = useCallback(async () => {
     setActivePopover(null);
