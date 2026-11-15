@@ -16,6 +16,22 @@
       "cardBorderColor": "rgba(248, 113, 113, 0.55)",
       "accessory": "santa-hat",
       "particles": "snow"
+    },
+    {
+      "id": "newyear-2027",
+      "startDate": "2026-12-31",
+      "endDate": "2027-01-07",
+      "badgeEs": "Feliz Año 2027",
+      "badgeEn": "Happy New Year 2027",
+      "accentColor": "#fde047",
+      "accentSecondary": "#f472b6",
+      "flowerColorStart": "#fffbeb",
+      "flowerColorEnd": "#fef08a",
+      "flowerAuraColor": "#facc15",
+      "birdGlowColor": "#facc15",
+      "cardBorderColor": "rgba(250, 204, 21, 0.55)",
+      "accessory": "party-hat",
+      "particles": "confetti"
     }
   ]
 }
