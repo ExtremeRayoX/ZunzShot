@@ -118,7 +118,7 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 ### `v1.1.0`
 - **Startup welcome animation (macOS & Windows):** ZunzShot now briefly displays its animated logo when launching the app or starting with your computer, without stealing focus or getting in the way of captures.
 - **Automatic seasonal festive editions:** During special dates *(Halloween, Holidays, New Year, etc.)*, the startup screen automatically displays seasonal themes without requiring an app update.
-- **Options in Settings → General:** Toggle the startup animation and festive themes anytime *(automatically skipped when **Ultra-light mode** is enabled)*.
+- **Options in Settings → General:** Toggle the startup animation and festive themes anytime (automatically skipped when **Ultra-light mode** is enabled).
 
 > **Full history:** Browse all previous releases (`v1.0.0` – `v1.0.9`) in [CHANGELOG.en.md](CHANGELOG.en.md) or on [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
 

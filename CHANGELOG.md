@@ -11,7 +11,7 @@ Registro cronológico de novedades, mejoras y correcciones de ZunzShot. Puedes d
 ## `v1.1.0`
 - **Animación de bienvenida al iniciar (macOS y Windows):** ZunzShot ahora muestra brevemente su logotipo animado al abrir la aplicación o iniciar con el equipo, sin robar foco ni interferir con tus capturas.
 - **Ediciones festivas automáticas:** En fechas señaladas *(Halloween, Navidad, Año Nuevo, etc.)*, la pantalla de inicio luce detalles especiales de temporada sin necesidad de actualizar la aplicación.
-- **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento *(se omiten automáticamente al usar **Modo ultra liviano**)*.
+- **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento (se omiten automáticamente al usar **Modo ultra liviano**).
 
 ## `v1.0.9`
 - **Actualizaciones en su propia ventana y sección:** *Buscar actualizaciones* ahora tiene su propia pantalla en el menú (justo encima de *Acerca de*) y se abre en una ventana independiente desde la bandeja del sistema o ante un aviso automático, sin abrir el menú principal detrás.

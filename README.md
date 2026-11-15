@@ -118,7 +118,7 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ### `v1.1.0`
 - **Animación de bienvenida al iniciar (macOS y Windows):** ZunzShot ahora muestra brevemente su logotipo animado al abrir la aplicación o iniciar con el equipo, sin robar foco ni interferir con tus capturas.
 - **Ediciones festivas automáticas:** En fechas señaladas *(Halloween, Navidad, Año Nuevo, etc.)*, la pantalla de inicio luce detalles especiales de temporada sin necesidad de actualizar la aplicación.
-- **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento *(se omiten automáticamente al usar **Modo ultra liviano**)*.
+- **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento (se omiten automáticamente al usar **Modo ultra liviano**).
 
 > **Historial completo:** Consulta todas las versiones anteriores (`v1.0.0` – `v1.0.9`) en [CHANGELOG.md](CHANGELOG.md) o en [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
 
