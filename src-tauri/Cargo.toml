@@ -1,6 +1,6 @@
 [package]
 name = "zunzshot"
-version = "1.0.9"
+version = "1.1.0"
 description = "ZunzShot — Fast, ultra-lightweight cross-platform screenshot & annotation utility"
 authors = ["ERX"]
 edition = "2021"
@@ -25,6 +25,8 @@ xcap = "0.9"
 arboard = "3.7"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

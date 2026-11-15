@@ -10,28 +10,28 @@
 
 **Instant, ultra-lightweight, and creative screenshot tool for macOS and Windows.**
 
-[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v109)
-[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v109)
+[![Version](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Version&color=06d6c6&style=for-the-badge)](#downloads-v110)
+[![Platforms](https://img.shields.io/badge/macOS_%7C_Windows-Direct_Download-10b981?style=for-the-badge)](#downloads-v110)
 [![Spanish README](https://img.shields.io/badge/Language-English_%7C_Espa%C3%B1ol-6366f1?style=for-the-badge)](README.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.0.9 for Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_x64-setup.exe"><img src="docs/icons/download-windows-en.svg" alt="Download ZunzShot v1.1.0 for Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.0.9 for macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_universal.dmg"><img src="docs/icons/download-macos-en.svg" alt="Download ZunzShot v1.1.0 for macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Downloads (`v1.0.9`)
+## Downloads (`v1.1.0`)
 
-Latest available version: **ZunzShot v1.0.9**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
+Latest available version: **ZunzShot v1.1.0**. Click directly on your operating system button above or your installer below to start an **instant direct download** *(no intermediate pages)*:
 
-| OS | Platform | Direct Download (`v1.0.9`) | Details |
+| OS | Platform | Direct Download (`v1.1.0`) | Details |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.0.9 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.0.9 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.0.9/ZunzShot_1.0.9_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Download v1.1.0 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_x64-setup.exe) | Official compact installer with built-in language selector (**English / Español**) and automatic updates. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon & Intel)** | [Download v1.1.0 for macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_universal.dmg) | Drag **ZunzShot** to **Applications** and grant **Screen Recording** permission on first launch. |
 
 > **macOS note:** If Gatekeeper shows an unverified developer prompt on first launch, **right-click → Open** on the app in Applications or run in Terminal:
 > ```bash
@@ -47,7 +47,7 @@ ZunzShot is built with a **local-first** architecture to keep your screen and fi
 - **100% local processing:** All screenshots, annotations, stickers, text labels, and exports are processed and kept strictly on your machine (RAM, system clipboard, or your chosen save folder).
 - **No cloud or third-party servers:** Your captures are never uploaded or shared externally unless you explicitly trigger **Share** or **Save**.
 - **Zero telemetry or tracking:** No usage analytics, ads, background data collection, or accounts required.
-- **Optional network check solely for updates:** The only optional outbound request is checking official GitHub Releases (`github.com/ExtremeRayoX/ZunzShot/releases`) when automatic updates or manual *Check for updates* are used in Settings (you can disable auto-checks at any time).
+- **Optional network check solely for updates and festive themes:** The only outbound requests contact this official GitHub repository (`ExtremeRayoX/ZunzShot`) to check for app updates or sync the cached declarative festive splash manifest (both can be turned off in **Settings**).
 
 ---
 
@@ -115,13 +115,12 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 
 ## Release Notes
 
-### `v1.0.9`
-- **Standalone Update window & dedicated menu section:** *Check for Updates* now has its own view in the menu (right above *About*) and opens in an independent window from the system tray or automatic alerts without raising the Settings window behind it.
-- **30-minute checks & 2, 4, or 6-hour snooze:** Automatic updates now check every **30 minutes** in the background, and clicking *Remind me later* lets you choose **2**, **4**, or **6 hours**.
-- **Cleaner release note formatting:** Version details now render with structured headings, clean bullet lists, and clear highlights for effortless reading.
-- **Single home for auto-update controls:** Automatic update toggles now live exclusively inside the Updates screen, keeping *General* and *About* clean.
+### `v1.1.0`
+- **Startup welcome animation (macOS & Windows):** Launching ZunzShot (manually or at system startup) blooms the capture flower and flies the origami hummingbird in from outside to touch it, forming the **ZunzShot** logo before fading out cleanly without stealing focus or getting in the way of captures.
+- **No-update seasonal festive themes:** Safe declarative JSON manifest & local date-checked cache ([`assets/splash-festive.json`](assets/splash-festive.json)) so seasonal themes *(Halloween, Holidays, New Year, etc.)* appear automatically on next launch without shipping a full installer update.
+- **Ultra-Light Mode & Settings controls:** *Ultra-light mode* automatically skips the startup splash so no WebView runs on boot, and **Settings → General** provides individual toggles for startup animation and festive theme sync.
 
-> **Full history:** Browse all previous releases (`v1.0.0` – `v1.0.8`) in [CHANGELOG.en.md](CHANGELOG.en.md) or on [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
+> **Full history:** Browse all previous releases (`v1.0.0` – `v1.0.9`) in [CHANGELOG.en.md](CHANGELOG.en.md) or on [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
 
 ---
 

@@ -18,6 +18,7 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
         overlay: resolve(__dirname, "overlay.html"),
         pin: resolve(__dirname, "pin.html"),
+        splash: resolve(__dirname, "splash.html"),
         toast: resolve(__dirname, "toast.html"),
         updater: resolve(__dirname, "updater.html"),
       },

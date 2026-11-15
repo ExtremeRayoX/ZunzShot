@@ -89,7 +89,7 @@ export const SettingsApp: React.FC = () => {
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.0.9");
+  const [appVersion, setAppVersion] = useState<string>("1.1.0");
   const [tab, setTab] = useState<TabId>("capture");
   const [extrasSubView, setExtrasSubView] = useState<"list" | "clock" | "text">("list");
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
@@ -416,7 +416,9 @@ export const SettingsApp: React.FC = () => {
         settings.outputFormat !== savedSettings.outputFormat ||
         settings.launchAtStartup !== savedSettings.launchAtStartup ||
         settings.showMagnifier !== savedSettings.showMagnifier ||
-        settings.ultraLightMode !== savedSettings.ultraLightMode)
+        settings.ultraLightMode !== savedSettings.ultraLightMode ||
+        settings.startupAnimation !== savedSettings.startupAnimation ||
+        settings.festiveThemes !== savedSettings.festiveThemes)
   );
 
   const isShortcutsDirty = Boolean(
@@ -987,6 +989,45 @@ export const SettingsApp: React.FC = () => {
               )}
             </div>
 
+            <div className="ultra-light-group">
+              <label
+                className={`checkbox-row ${settings.ultraLightMode ? "is-disabled" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={settings.ultraLightMode}
+                  checked={!settings.ultraLightMode && settings.startupAnimation}
+                  onChange={(e) =>
+                    setSettings({ ...settings, startupAnimation: e.target.checked })
+                  }
+                />
+                <span>
+                  {t.startupAnimationLabel}
+                  {settings.ultraLightMode ? ` (${t.startupAnimationUltraLightHint})` : ""}
+                </span>
+              </label>
+
+              <label
+                className={`checkbox-row nested-checkbox-row ${
+                  settings.ultraLightMode || !settings.startupAnimation ? "is-disabled" : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={settings.ultraLightMode || !settings.startupAnimation}
+                  checked={
+                    !settings.ultraLightMode &&
+                    settings.startupAnimation &&
+                    settings.festiveThemes
+                  }
+                  onChange={(e) =>
+                    setSettings({ ...settings, festiveThemes: e.target.checked })
+                  }
+                />
+                <span>{t.festiveThemesLabel}</span>
+              </label>
+            </div>
+
             {platform === "macos" && (
               <div className="perm-tip">
                 <span>{t.macosPermTip}</span>
@@ -1009,6 +1050,8 @@ export const SettingsApp: React.FC = () => {
                       launchAtStartup: savedSettings.launchAtStartup,
                       showMagnifier: savedSettings.showMagnifier,
                       ultraLightMode: savedSettings.ultraLightMode,
+                      startupAnimation: savedSettings.startupAnimation,
+                      festiveThemes: savedSettings.festiveThemes,
                     }
                   : prev
               )

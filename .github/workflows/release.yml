@@ -60,10 +60,9 @@ jobs:
             - **Windows (Instalador oficial):** `ZunzShot___VERSION___x64-setup.exe`
 
             ### Novedades incluidas
-            - **Actualizaciones en ventana independiente:** *Buscar actualizaciones* ahora abre su propia ventana desde la bandeja del sistema o ante un aviso automático, sin levantar el menú principal detrás, y cuenta con su sección propia en Configuración justo encima de *Acerca de*.
-            - **Comprobación cada 30 minutos y recordatorios flexibles:** Al activar actualizaciones automáticas, ZunzShot revisa cada **30 minutos** y te permite elegir recordar más tarde en **2**, **4** o **6 horas**.
-            - **Detalles de versión más legibles:** Las notas de actualización se muestran organizadas con títulos, listas y resaltados limpios.
-            - **Control centralizado:** Las actualizaciones automáticas ahora se configuran únicamente desde la pantalla de actualizaciones, simplificando *General* y *Acerca de*.
+            - **Animación de inicio ("Desde fuera"):** Al abrir ZunzShot o iniciarse con el sistema, la flor del logo brota sobre el escritorio, el colibrí vuela desde fuera con aleteo fluido hasta picarla y revela la tarjeta con el logotipo **ZunzShot**. No interrumpe capturas ni reaperturas de configuración, y se omite automáticamente en *Modo Ultra Ligero*.
+            - **Temas festivos estacionales sin reinstalar:** ZunzShot puede lucir ediciones temporales (Halloween, Navidad, Año Nuevo, San Valentín, etc.) descargando de forma silenciosa una configuración declarativa segura (`splash-festive.json`) con caché local e instantánea.
+            - **Control en Configuración:** Desde *General* puedes activar o desactivar la animación de inicio y los temas festivos en cualquier momento.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

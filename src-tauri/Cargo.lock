@@ -6261,7 +6261,7 @@ dependencies = [
 
 [[package]]
 name = "zunzshot"
-version = "1.0.9"
+version = "1.1.0"
 dependencies = [
  "arboard",
  "chrono",
@@ -6270,6 +6270,8 @@ dependencies = [
  "objc2-app-kit",
  "objc2-core-graphics",
  "objc2-foundation",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",

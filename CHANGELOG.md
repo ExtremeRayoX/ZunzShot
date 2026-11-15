@@ -8,6 +8,11 @@ Registro cronológico de novedades, mejoras y correcciones de ZunzShot. Puedes d
 
 ---
 
+## `v1.1.0`
+- **Animación de bienvenida al iniciar (macOS y Windows):** Al iniciar ZunzShot (manualmente o con el sistema), brota la flor de captura y el colibrí origami entra volando desde fuera para picarla y formar el logotipo completo de **ZunzShot** antes de desvanecerse suavemente sin robar foco ni interferir con capturas.
+- **Temas festivos sin actualizar la aplicación:** Sistema declarativo y seguro con caché local por fechas en [`assets/splash-festive.json`](assets/splash-festive.json) para activar ediciones de temporada *(Halloween, Navidad, Año Nuevo, etc.)* en el siguiente arranque sin obligar a instalar actualizaciones.
+- **Integración con Modo ultra liviano y Ajustes:** En **Modo ultra liviano** se omite la animación para no abrir WebViews al arranque, y desde **Ajustes → General** puedes activar o desactivar tanto la animación de inicio como la sincronización festiva.
+
 ## `v1.0.9`
 - **Actualizaciones en su propia ventana y sección:** *Buscar actualizaciones* ahora tiene su propia pantalla en el menú (justo encima de *Acerca de*) y se abre en una ventana independiente desde la bandeja del sistema o ante un aviso automático, sin abrir el menú principal detrás.
 - **Revisión cada 30 minutos y recordatorios de 2, 4 o 6 horas:** Cuando activas la búsqueda automática, ZunzShot comprueba cada **30 minutos** en segundo plano y al pulsar *Recordar más tarde* puedes elegir si volver a avisar en **2**, **4** o **6 horas**.

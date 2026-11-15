@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZunzShot</title>
+    <style>
+      :root {
+        --dur: 4000ms;
+        --svg-w: min(820px, 95vw, calc(76vh * 1944 / 1080));
+        --accent-1: #2dd4bf;
+        --accent-2: #818cf8;
+        --badge-border: rgba(45, 212, 191, 0.4);
+        --spring-bloom: cubic-bezier(0.22, 1.28, 0.36, 1);
+        --ease-flight: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      @supports (animation-timing-function: linear(0, 1)) {
+        :root {
+          --spring-bloom: linear(
+            0, 0.012 1%, 0.05 2.2%, 0.42 7%, 0.89 13%, 1.07 17%,
+            1.11 20%, 1.08 24%, 1.01 31%, 0.99 39%, 1
+          );
+        }
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      }
+
+      .splash-lockup {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        translate: 0px 0px;
+        rotate: 0deg;
+        scale: 1;
+      }
+
+      .splash-svg {
+        width: var(--svg-w);
+        height: auto;
+        aspect-ratio: 1944 / 1080;
+        display: block;
+        overflow: visible;
+      }
+
+      .svg-part {
+        transform-box: view-box;
+      }
+      #background-layer { transform-origin: 512px 512px; }
+      #flower-stem-and-leaves { transform-origin: 737px 982px; }
+      #leaf-photo-left { transform-origin: 718px 825px; }
+      #leaf-photo-right { transform-origin: 755px 802px; }
+      #flower-blossom-capture-frame { transform-origin: 737px 569px; }
+      #crop-brackets { transform-origin: 737px 569px; }
+      #impact-ring {
+        transform-origin: 737px 569px;
+        opacity: 0;
+      }
+      #hummingbird { transform-origin: 450px 380px; }
+      #wings-front { transform-origin: 412px 322px; }
+      #wings-rear { transform-origin: 405px 305px; }
+
+      .wordmark {
+        margin-top: calc(var(--svg-w) * -0.034);
+        font-size: calc(var(--svg-w) * 0.088);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1;
+        white-space: nowrap;
+        color: #f8fafc;
+        text-shadow: 0 4px 18px rgba(2, 6, 23, 0.65);
+        translate: 0px 0px;
+        scale: 1;
+      }
+      .wordmark-accent {
+        background: linear-gradient(135deg, var(--accent-1) 0%, #38bdf8 55%, var(--accent-2) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .festive-badge {
+        display: none;
+        margin-top: 10px;
+        padding: 5px 14px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid var(--badge-border);
+        color: #e2e8f0;
+        font-size: calc(var(--svg-w) * 0.017);
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+      }
+      .festive-badge.is-visible {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .festive-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent-1);
+        flex-shrink: 0;
+      }
+
+      /* Accesorios y partículas festivas: ocultos salvo activación por tema */
+      .festive-accessory,
+      .particle-group {
+        display: none;
+      }
+      .festive-accessory.is-active,
+      .particle-group.is-active {
+        display: inline;
+      }
+      .particle-group {
+        transform-box: view-box;
+        transform-origin: 512px 512px;
+      }
+
+      /* Visibilidad estática por defecto */
+      #flower-glow-rect { opacity: 0.58; }
+      #bird-halo { opacity: 0.28; }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .splash-lockup {
+          animation: lockupFadeOut var(--dur) linear 1 both;
+        }
+        #background-layer {
+          animation: cardFormOnTouch var(--dur) var(--spring-bloom) 1 both;
+        }
+        #flower-stem-and-leaves {
+          animation: stemGrow var(--dur) var(--ease-flight) 1 both;
+        }
+        #leaf-photo-left {
+          animation: leafLeftOpen var(--dur) var(--spring-bloom) 1 both;
+        }
+        #leaf-photo-right {
+          animation: leafRightOpen var(--dur) var(--spring-bloom) 1 both;
+        }
+        #flower-blossom-capture-frame {
+          animation: flowerBloomAndPulse var(--dur) var(--ease-flight) 1 both;
+        }
+        #crop-brackets {
+          animation: bracketsSnap var(--dur) var(--spring-bloom) 1 both;
+        }
+        #impact-ring {
+          animation: impactPulse var(--dur) ease-out 1 both;
+        }
+        #flower-glow-rect {
+          animation: flowerGlowOnTouch var(--dur) ease-out 1 both;
+        }
+        #bird-halo {
+          animation: birdHaloOnTouch var(--dur) ease-out 1 both;
+        }
+        #hummingbird {
+          animation: birdFlightOutside var(--dur) var(--ease-flight) 1 both;
+        }
+        #wings-front {
+          animation: wingFrontBeat var(--dur) ease-in-out 1 both;
+        }
+        #wings-rear {
+          animation: wingRearBeat var(--dur) ease-in-out 1 both;
+        }
+        .particle-group.is-active {
+          animation: particlesBurst var(--dur) ease-out 1 both;
+        }
+        .wordmark,
+        .festive-badge.is-visible {
+          animation: wordmarkReveal var(--dur) var(--ease-flight) 1 both;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .splash-lockup {
+          animation: reducedFade var(--dur) ease 1 both;
+        }
+      }
+
+      @keyframes reducedFade {
+        0% { opacity: 0; }
+        9%, 89% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+
+      /* Inicio con ~2% (80ms) de margen para absorber latencia de primer frame sin recortar */
+      @keyframes lockupFadeOut {
+        0%, 89% { opacity: 1; transform: scale(1); }
+        100%    { opacity: 0; transform: scale(0.96); }
+      }
+
+      @keyframes cardFormOnTouch {
+        0%, 34%   { opacity: 0; transform: scale(0.91); }
+        42%, 100% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes stemGrow {
+        0%, 2%    { opacity: 0; transform: scaleY(0.15); }
+        11%, 100% { opacity: 1; transform: scaleY(1); }
+      }
+
+      @keyframes leafLeftOpen {
+        0%, 5%    { opacity: 0; transform: scale(0.4) rotate(22deg); }
+        16%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+      }
+
+      @keyframes leafRightOpen {
+        0%, 7%    { opacity: 0; transform: scale(0.4) rotate(-22deg); }
+        17%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+      }
+
+      @keyframes flowerBloomAndPulse {
+        0%, 2%    { opacity: 0; transform: scale(0.5); }
+        13%       { opacity: 1; transform: scale(1.05); }
+        17%, 34%  { opacity: 1; transform: scale(1); }
+        37%       { opacity: 1; transform: scale(1.1) rotate(2deg); }
+        43%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+      }
+
+      @keyframes bracketsSnap {
+        0%, 4%    { opacity: 0; transform: scale(1.24); }
+        14%, 34%  { opacity: 1; transform: scale(1); }
+        37%       { opacity: 1; transform: scale(0.92); }
+        43%, 100% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes impactPulse {
+        0%, 35% { opacity: 0; transform: scale(0.65); }
+        37%     { opacity: 0.82; transform: scale(1.05); }
+        47%     { opacity: 0; transform: scale(1.65); }
+        100%    { opacity: 0; transform: scale(1.65); }
+      }
+
+      @keyframes flowerGlowOnTouch {
+        0%, 35%   { opacity: 0; }
+        44%, 100% { opacity: 0.58; }
+      }
+
+      @keyframes birdHaloOnTouch {
+        0%, 38%   { opacity: 0; }
+        47%, 100% { opacity: 0.28; }
+      }
+
+      @keyframes particlesBurst {
+        0%, 35%   { opacity: 0; transform: scale(0.75) translateY(16px); }
+        44%       { opacity: 1; transform: scale(1) translateY(0px); }
+        89%, 100% { opacity: 0.85; transform: scale(1.06) translateY(-14px); }
+      }
+
+      @keyframes birdFlightOutside {
+        0%, 8% {
+          opacity: 0;
+          transform: translate(-580px, -110px) rotate(-17deg) scale(0.74);
+          animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        19% {
+          opacity: 1;
+          transform: translate(-260px, -44px) rotate(-7deg) scale(0.92);
+          animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        32% {
+          opacity: 1;
+          transform: translate(-10px, -12px) rotate(-4deg) scale(1);
+          animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        35% {
+          opacity: 1;
+          transform: translate(14px, 54px) rotate(6deg) scale(1);
+          animation-timing-function: cubic-bezier(0.34, 1.35, 0.64, 1);
+        }
+        42%, 100% {
+          opacity: 1;
+          transform: translate(0px, 0px) rotate(0deg) scale(1);
+        }
+      }
+
+      @keyframes wingFrontBeat {
+        0%, 10%   { transform: rotate(0deg) scaleY(1); }
+        13%       { transform: rotate(-16deg) scaleY(0.72); }
+        15%       { transform: rotate(8deg) scaleY(1.04); }
+        17%       { transform: rotate(-16deg) scaleY(0.74); }
+        20%       { transform: rotate(8deg) scaleY(1.03); }
+        22%       { transform: rotate(-15deg) scaleY(0.76); }
+        24%       { transform: rotate(7deg) scaleY(1.03); }
+        26%       { transform: rotate(-14deg) scaleY(0.78); }
+        29%       { transform: rotate(6deg) scaleY(1.02); }
+        31%       { transform: rotate(-12deg) scaleY(0.8); }
+        33%       { transform: rotate(5deg) scaleY(1.02); }
+        36%       { transform: rotate(-10deg) scaleY(0.84); }
+        39%       { transform: rotate(4deg) scaleY(1.01); }
+        42%, 100% { transform: rotate(0deg) scaleY(1); }
+      }
+
+      @keyframes wingRearBeat {
+        0%, 10%   { transform: rotate(0deg) scaleY(1); }
+        13%       { transform: rotate(12deg) scaleY(0.82); }
+        15%       { transform: rotate(-10deg) scaleY(1.04); }
+        17%       { transform: rotate(12deg) scaleY(0.82); }
+        20%       { transform: rotate(-10deg) scaleY(1.03); }
+        22%       { transform: rotate(11deg) scaleY(0.84); }
+        24%       { transform: rotate(-9deg) scaleY(1.03); }
+        26%       { transform: rotate(10deg) scaleY(0.85); }
+        29%       { transform: rotate(-8deg) scaleY(1.02); }
+        31%       { transform: rotate(9deg) scaleY(0.88); }
+        33%       { transform: rotate(-6deg) scaleY(1.01); }
+        36%       { transform: rotate(7deg) scaleY(0.9); }
+        39%       { transform: rotate(-4deg) scaleY(1); }
+        42%, 100% { transform: rotate(0deg) scaleY(1); }
+      }
+
+      @keyframes wordmarkReveal {
+        0%, 38%   { opacity: 0; transform: translateY(10px) scale(0.96); }
+        47%, 100% { opacity: 1; transform: translateY(0px) scale(1); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash-lockup">
+      <svg
+        class="splash-svg"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="-460 -20 1944 1080"
+        aria-label="ZunzShot Logo"
+      >
+        <defs>
+          <linearGradient id="bgGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+            <stop offset="0%" stop-color="#2c3035" />
+            <stop offset="50%" stop-color="#212328" />
+            <stop offset="100%" stop-color="#17181c" />
+          </linearGradient>
+
+          <clipPath id="squircleClip">
+            <path d="M 272,42 L 752,42 C 872,42 982,152 982,272 L 982,752 C 982,872 872,982 752,982 L 272,982 C 152,982 42,872 42,752 L 42,272 C 42,152 152,42 272,42 Z" />
+          </clipPath>
+
+          <filter id="birdOuterGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="24" />
+          </filter>
+          <filter id="flowerGlowFilter" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="28" />
+          </filter>
+
+          <radialGradient id="birdAmbientGlow" cx="0.34" cy="0.36" r="0.36">
+            <stop id="bgGlowStop1" offset="0%" stop-color="#0ea5e9" stop-opacity="0.22" />
+            <stop id="bgGlowStop2" offset="55%" stop-color="#06d6c6" stop-opacity="0.09" />
+            <stop id="bgGlowStop3" offset="100%" stop-color="#06d6c6" stop-opacity="0" />
+          </radialGradient>
+
+          <radialGradient id="flowerAura" cx="0.5" cy="0.5" r="0.5">
+            <stop id="auraStop1" offset="0%" stop-color="#eafffc" stop-opacity="0.90" />
+            <stop id="auraStop2" offset="38%" stop-color="#88f7ea" stop-opacity="0.48" />
+            <stop id="auraStop3" offset="72%" stop-color="#2dd4bf" stop-opacity="0.16" />
+            <stop id="auraStop4" offset="100%" stop-color="#2dd4bf" stop-opacity="0" />
+          </radialGradient>
+
+          <radialGradient id="flowerBoxFill" cx="0.52" cy="0.48" r="0.58">
+            <stop id="flowerFillStart" offset="0%" stop-color="#ffffff" />
+            <stop id="flowerFillMid" offset="45%" stop-color="#dcfff9" />
+            <stop id="flowerFillEnd" offset="100%" stop-color="#b4f5ec" />
+          </radialGradient>
+
+          <linearGradient id="bracketTopGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop id="bracketStop1" offset="0%" stop-color="#d4f9fc" />
+            <stop id="bracketStop2" offset="100%" stop-color="#bcf2ea" />
+          </linearGradient>
+
+          <linearGradient id="stemGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#c6fce5" />
+            <stop offset="55%" stop-color="#a5f3e9" />
+            <stop offset="100%" stop-color="#8decf7" />
+          </linearGradient>
+
+          <linearGradient id="leafLeftGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#d6f8ff" />
+            <stop offset="100%" stop-color="#9cf2f7" />
+          </linearGradient>
+
+          <linearGradient id="leafRightGrad" x1="1" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#dbf8ff" />
+            <stop offset="100%" stop-color="#9ff1f4" />
+          </linearGradient>
+
+          <linearGradient id="leafPhotoInnerGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#265460" />
+            <stop offset="100%" stop-color="#1c3f49" />
+          </linearGradient>
+
+          <linearGradient id="grad_rw_main" x1="0.592" y1="0.065" x2="0.450" y2="0.959">
+            <stop offset="0%" stop-color="#19ffff" />
+            <stop offset="100%" stop-color="#2f69b6" />
+          </linearGradient>
+          <linearGradient id="grad_rw_shadow" x1="0.620" y1="0.097" x2="0.262" y2="0.795">
+            <stop offset="0%" stop-color="#16b795" />
+            <stop offset="100%" stop-color="#0a536d" />
+          </linearGradient>
+          <linearGradient id="grad_fw_top" x1="0.813" y1="0.149" x2="0.219" y2="0.778">
+            <stop offset="0%" stop-color="#45faf9" />
+            <stop offset="100%" stop-color="#14fffd" />
+          </linearGradient>
+          <linearGradient id="grad_fw_mid" x1="1.013" y1="0.529" x2="0.001" y2="0.443">
+            <stop offset="0%" stop-color="#1db0d4" />
+            <stop offset="100%" stop-color="#15f1f0" />
+          </linearGradient>
+          <linearGradient id="grad_fw_low" x1="1.085" y1="0.575" x2="-0.047" y2="0.232">
+            <stop offset="0%" stop-color="#1e5da6" />
+            <stop offset="100%" stop-color="#1bdbe6" />
+          </linearGradient>
+          <linearGradient id="grad_fw_green" x1="0.582" y1="0.793" x2="-0.105" y2="0.052">
+            <stop offset="0%" stop-color="#0a8086" />
+            <stop offset="100%" stop-color="#10ff9a" />
+          </linearGradient>
+          <linearGradient id="grad_b_nape" x1="0.861" y1="0.929" x2="0.314" y2="0.267">
+            <stop offset="0%" stop-color="#06ffb0" />
+            <stop offset="100%" stop-color="#20afa1" />
+          </linearGradient>
+          <linearGradient id="grad_b_sh_chest" x1="0.826" y1="0.300" x2="0.267" y2="0.500">
+            <stop offset="0%" stop-color="#04b6a6" />
+            <stop offset="100%" stop-color="#13d891" />
+          </linearGradient>
+          <linearGradient id="grad_b_upper_back" x1="0.55" y1="0.95" x2="0.35" y2="0.05">
+            <stop offset="0%" stop-color="#7bffab" />
+            <stop offset="65%" stop-color="#2ce09c" />
+            <stop offset="100%" stop-color="#119e8b" />
+          </linearGradient>
+          <linearGradient id="grad_b_upper_chest" x1="0.988" y1="0.837" x2="0.200" y2="0.474">
+            <stop offset="0%" stop-color="#00c886" />
+            <stop offset="100%" stop-color="#2fd897" />
+          </linearGradient>
+          <linearGradient id="grad_b_neck_cyan" x1="0.794" y1="-0.101" x2="0.064" y2="0.893">
+            <stop offset="0%" stop-color="#1c91b1" />
+            <stop offset="100%" stop-color="#08e2f3" />
+          </linearGradient>
+          <linearGradient id="grad_b_neck_right" x1="0.752" y1="0.553" x2="0.443" y2="0.466">
+            <stop offset="0%" stop-color="#3c4ebd" />
+            <stop offset="100%" stop-color="#0bc1cf" />
+          </linearGradient>
+          <linearGradient id="grad_b_chest_edge" x1="0.2" y1="0.5" x2="0.85" y2="0.5">
+            <stop offset="0%" stop-color="#1c86cf" />
+            <stop offset="100%" stop-color="#2a9ce0" />
+          </linearGradient>
+          <linearGradient id="grad_b_belly_blue" x1="0.48" y1="0.05" x2="0.58" y2="0.85">
+            <stop offset="0%" stop-color="#097d7f" />
+            <stop offset="55%" stop-color="#1c61a5" />
+            <stop offset="100%" stop-color="#2554ad" />
+          </linearGradient>
+          <linearGradient id="grad_t_strip_top" x1="0.987" y1="0.755" x2="0.258" y2="0.480">
+            <stop offset="0%" stop-color="#0de286" />
+            <stop offset="100%" stop-color="#2dcdba" />
+          </linearGradient>
+          <linearGradient id="grad_t_strip_low" x1="0.12" y1="0.35" x2="0.72" y2="0.32">
+            <stop offset="0%" stop-color="#22e8bc" />
+            <stop offset="48%" stop-color="#0da795" />
+            <stop offset="100%" stop-color="#223688" />
+          </linearGradient>
+          <linearGradient id="grad_t_mid_indigo" x1="0.58" y1="0.05" x2="0.28" y2="0.92">
+            <stop offset="0%" stop-color="#231c6e" />
+            <stop offset="55%" stop-color="#35399c" />
+            <stop offset="100%" stop-color="#4152b4" />
+          </linearGradient>
+          <linearGradient id="grad_t_tip_blue" x1="0.15" y1="0.45" x2="0.80" y2="0.80">
+            <stop offset="0%" stop-color="#4263bf" />
+            <stop offset="100%" stop-color="#2850a6" />
+          </linearGradient>
+          <linearGradient id="grad_t_back_violet" x1="0.85" y1="0.38" x2="0.05" y2="0.68">
+            <stop offset="0%" stop-color="#2e3b98" />
+            <stop offset="65%" stop-color="#1d2273" />
+            <stop offset="100%" stop-color="#172c7a" />
+          </linearGradient>
+          <linearGradient id="grad_h_crown_top" x1="0.0" y1="0.0" x2="0.85" y2="1.0">
+            <stop offset="0%" stop-color="#88f7c3" />
+            <stop offset="55%" stop-color="#6af9a8" />
+            <stop offset="100%" stop-color="#4ee69d" />
+          </linearGradient>
+          <linearGradient id="grad_h_forehead" x1="0.15" y1="0.00" x2="0.88" y2="1.00">
+            <stop offset="0%" stop-color="#1df291" />
+            <stop offset="100%" stop-color="#0ac484" />
+          </linearGradient>
+          <linearGradient id="grad_h_cheek_dark" x1="1.001" y1="0.526" x2="0.176" y2="0.391">
+            <stop offset="0%" stop-color="#49308c" />
+            <stop offset="100%" stop-color="#2b509e" />
+          </linearGradient>
+          <linearGradient id="grad_h_beak_up" x1="0.449" y1="0.224" x2="0.356" y2="0.502">
+            <stop offset="0%" stop-color="#72a9c6" />
+            <stop offset="100%" stop-color="#445d9b" />
+          </linearGradient>
+          <linearGradient id="grad_h_beak_low" x1="0.387" y1="0.326" x2="0.358" y2="0.470">
+            <stop offset="0%" stop-color="#172767" />
+            <stop offset="100%" stop-color="#3c4290" />
+          </linearGradient>
+        </defs>
+
+        <!-- Base del ícono recortada en squircle -->
+        <g id="ZunzShot-Card" clip-path="url(#squircleClip)">
+          <g id="background-layer" class="svg-part">
+            <path d="M 272,42 L 752,42 C 872,42 982,152 982,272 L 982,752 C 982,872 872,982 752,982 L 272,982 C 152,982 42,872 42,752 L 42,272 C 42,152 152,42 272,42 Z" fill="url(#bgGrad)" />
+            <circle cx="350" cy="360" r="350" fill="url(#birdAmbientGlow)" />
+            <path id="card-accent-stroke" d="M 272,45 L 752,45 C 870,45 979,154 979,272 L 979,752 C 979,870 870,979 752,979 L 272,979 C 154,979 45,870 45,752 L 45,272 C 45,154 154,45 272,45 Z" fill="none" stroke="none" stroke-width="8" />
+          </g>
+
+          <!-- Halo estático del colibrí: sin blur durante el vuelo -->
+          <path id="bird-halo" d="M 134,174 L 292,235 L 268,131 L 384,223 L 441,329 L 505,266 L 564,276 L 601,321 L 717,395 L 581,340 L 530,372 L 485,468 L 349,526 L 377,591 L 315,658 L 282,595 L 316,469 L 342,409 L 191,286 Z" fill="#08d9e6" opacity="0.28" filter="url(#birdOuterGlow)" />
+
+          <!-- Partículas festivas (opcionales según calendario remoto) -->
+          <g id="particles-snow" class="particle-group" fill="#f8fafc">
+            <circle cx="160" cy="180" r="10" opacity="0.85" />
+            <circle cx="840" cy="170" r="12" opacity="0.75" />
+            <circle cx="520" cy="135" r="8" opacity="0.7" />
+            <circle cx="215" cy="760" r="9" opacity="0.7" />
+            <circle cx="890" cy="360" r="11" opacity="0.8" />
+            <circle cx="145" cy="495" r="7" opacity="0.65" />
+          </g>
+          <g id="particles-bats" class="particle-group" fill="#0f172a" stroke="var(--accent-1, #fb923c)" stroke-width="2" stroke-linejoin="round">
+            <polygon points="810,200 832,184 844,198 858,184 878,200 854,210 844,222 834,210" />
+            <polygon points="150,720 168,708 178,718 188,708 206,720 186,728 178,736 170,728" />
+            <polygon points="845,320 860,310 868,318 876,310 890,320 874,327 868,334 862,327" />
+          </g>
+          <g id="particles-confetti" class="particle-group">
+            <polygon points="180,180 206,168 198,196" fill="#facc15" />
+            <polygon points="825,180 850,196 822,206" fill="#38bdf8" />
+            <polygon points="870,350 896,340 888,368" fill="#f472b6" />
+            <polygon points="155,700 182,690 172,718" fill="#34d399" />
+            <polygon points="540,120 564,132 544,148" fill="#fb923c" />
+            <polygon points="865,780 890,770 882,796" fill="#facc15" />
+          </g>
+          <g id="particles-hearts" class="particle-group" fill="var(--accent-1, #fb7185)">
+            <polygon points="825,215 802,192 814,176 825,188 836,176 848,192" />
+            <polygon points="190,740 172,722 181,710 190,719 199,710 208,722" opacity="0.85" />
+            <polygon points="885,375 867,358 876,346 885,355 894,346 903,358" opacity="0.8" />
+          </g>
+          <g id="particles-sparkles" class="particle-group" fill="var(--accent-1, #fef08a)">
+            <polygon points="835,175 843,195 863,203 843,211 835,231 827,211 807,203 827,195" />
+            <polygon points="175,715 181,730 196,736 181,742 175,757 169,742 154,736 169,730" opacity="0.85" />
+            <polygon points="875,355 880,367 892,372 880,377 875,389 870,377 858,372 870,367" opacity="0.8" />
+          </g>
+
+          <!-- Flor de captura + tallo + hojas -->
+          <g id="capture-flower">
+            <circle cx="737" cy="569" r="195" fill="url(#flowerAura)" />
+            <rect id="flower-glow-rect" x="640" y="472" width="194" height="194" rx="8" fill="#9cfff0" opacity="0.58" filter="url(#flowerGlowFilter)" />
+            <circle id="impact-ring" class="svg-part" cx="737" cy="569" r="118" fill="none" stroke="#9cfff0" stroke-width="10" />
+
+            <g id="flower-stem-and-leaves" class="svg-part">
+              <rect id="stem" x="729" y="662" width="15" height="322" fill="url(#stemGrad)" />
+
+              <g id="leaf-photo-left" class="svg-part">
+                <polygon points="634,755 712,791 712,875 602,824" fill="url(#leafLeftGrad)" />
+                <polygon points="640,773 698,800 677,845 617,816" fill="url(#leafPhotoInnerGrad)" />
+              </g>
+
+              <g id="leaf-photo-right" class="svg-part">
+                <polygon points="839,732 871,801 761,853 761,768" fill="url(#leafRightGrad)" />
+                <polygon points="831,750 854,796 796,823 774,777" fill="url(#leafPhotoInnerGrad)" />
+              </g>
+            </g>
+
+            <g id="flower-blossom-capture-frame" class="svg-part">
+              <path id="flower-inner-frame" d="M 685,472 L 789,472 L 789,490 L 817,490 L 817,517 L 834,517 L 834,621 L 817,621 L 817,648 L 789,648 L 789,666 L 685,666 L 685,648 L 657,648 L 657,621 L 640,621 L 640,517 L 657,517 L 657,490 L 685,490 Z" fill="url(#flowerBoxFill)" />
+
+              <g id="crop-brackets" class="svg-part" fill="url(#bracketTopGrad)">
+                <path d="M 625,517 L 625,469 Q 625,457 637,457 L 685,457 L 685,472 L 643,472 Q 640,472 640,475 L 640,517 Z" />
+                <path d="M 789,457 L 837,457 Q 849,457 849,469 L 849,517 L 834,517 L 834,475 Q 834,472 831,472 L 789,472 Z" />
+                <path d="M 849,621 L 849,669 Q 849,681 837,681 L 789,681 L 789,666 L 831,666 Q 834,666 834,663 L 834,621 Z" />
+                <path d="M 685,681 L 637,681 Q 625,681 625,669 L 625,621 L 640,621 L 640,663 Q 640,666 643,666 L 685,666 Z" />
+              </g>
+            </g>
+          </g>
+        </g>
+
+        <!-- Colibrí Origami volando desde fuera -->
+        <g id="hummingbird-slot">
+          <g id="hummingbird" class="svg-part">
+            <g id="wings-rear" class="svg-part">
+              <polygon id="rw_main" points="268,131 384,223 363,270 292,235" fill="url(#grad_rw_main)" stroke="url(#grad_rw_main)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="rw_shadow" points="384,223 441,329 363,270" fill="url(#grad_rw_shadow)" stroke="url(#grad_rw_shadow)" stroke-width="0.6" stroke-linejoin="round" />
+            </g>
+            <g id="wings-front" class="svg-part">
+              <polygon id="fw_top" points="134,174 323,247 191,286" fill="url(#grad_fw_top)" stroke="url(#grad_fw_top)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="fw_mid" points="191,286 323,247 332,326" fill="url(#grad_fw_mid)" stroke="url(#grad_fw_mid)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="fw_low" points="191,286 332,326 342,409" fill="url(#grad_fw_low)" stroke="url(#grad_fw_low)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="fw_green" points="323,247 441,329 342,409 332,326" fill="url(#grad_fw_green)" stroke="url(#grad_fw_green)" stroke-width="0.6" stroke-linejoin="round" />
+            </g>
+            <g id="body-and-tail">
+              <polygon id="b_nape" points="441,329 505,266 547,304" fill="url(#grad_b_nape)" stroke="url(#grad_b_nape)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_sh_chest" points="410,355 441,329 471,434" fill="url(#grad_b_sh_chest)" stroke="url(#grad_b_sh_chest)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_upper_back" points="342,409 410,355 363,453" fill="url(#grad_b_upper_back)" stroke="url(#grad_b_upper_back)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_upper_chest" points="410,355 471,434 363,453" fill="url(#grad_b_upper_chest)" stroke="url(#grad_b_upper_chest)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_neck_cyan" points="441,329 547,304 471,434" fill="url(#grad_b_neck_cyan)" stroke="url(#grad_b_neck_cyan)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_neck_right" points="547,304 530,372 471,434" fill="url(#grad_b_neck_right)" stroke="url(#grad_b_neck_right)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_chest_edge" points="530,372 485,468 471,434" fill="url(#grad_b_chest_edge)" stroke="url(#grad_b_chest_edge)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="b_belly_blue" points="363,453 471,434 485,468 349,526" fill="url(#grad_b_belly_blue)" stroke="url(#grad_b_belly_blue)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="t_strip_top" points="342,409 363,453 316,469" fill="url(#grad_t_strip_top)" stroke="url(#grad_t_strip_top)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="t_strip_low" points="316,469 363,453 282,595" fill="url(#grad_t_strip_low)" stroke="url(#grad_t_strip_low)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="t_mid_indigo" points="363,453 349,526 282,595" fill="url(#grad_t_mid_indigo)" stroke="url(#grad_t_mid_indigo)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="t_tip_blue" points="282,595 349,526 315,658" fill="url(#grad_t_tip_blue)" stroke="url(#grad_t_tip_blue)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="t_back_violet" points="349,526 377,591 315,658" fill="url(#grad_t_back_violet)" stroke="url(#grad_t_back_violet)" stroke-width="0.6" stroke-linejoin="round" />
+            </g>
+            <g id="head-and-beak">
+              <polygon id="h_crown_top" points="505,266 564,276 547,304" fill="url(#grad_h_crown_top)" stroke="url(#grad_h_crown_top)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="h_forehead" points="564,276 601,321 565,321 547,304" fill="url(#grad_h_forehead)" stroke="url(#grad_h_forehead)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="h_cheek_dark" points="547,304 565,321 581,340 530,372" fill="url(#grad_h_cheek_dark)" stroke="url(#grad_h_cheek_dark)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="h_beak_up" points="565,321 601,321 717,395" fill="url(#grad_h_beak_up)" stroke="url(#grad_h_beak_up)" stroke-width="0.6" stroke-linejoin="round" />
+              <polygon id="h_beak_low" points="565,321 717,395 581,340" fill="url(#grad_h_beak_low)" stroke="url(#grad_h_beak_low)" stroke-width="0.6" stroke-linejoin="round" />
+            </g>
+
+            <!-- Accesorios origami festivos sujetos a la corona del colibrí -->
+            <g id="accessory-witch-hat" class="festive-accessory" transform="translate(534, 271) rotate(9.5)">
+              <polygon points="-44,5 44,5 34,-6 -34,-6" fill="#312e81" />
+              <polygon points="-22,-6 22,-6 17,-18 -17,-18" fill="#f97316" />
+              <polygon points="-17,-18 17,-18 -5,-62" fill="#4338ca" />
+              <polygon points="-5,-62 12,-54 -2,-74" fill="#1e1b4b" />
+            </g>
+
+            <g id="accessory-santa-hat" class="festive-accessory" transform="translate(534, 271) rotate(9.5)">
+              <polygon points="-25,-5 24,-5 -14,-54" fill="#ef4444" />
+              <polygon points="24,-5 2,-30 -14,-54" fill="#b91c1c" />
+              <polygon points="-14,-54 -34,-42 -21,-32" fill="#dc2626" />
+              <polygon points="-38,-46 -30,-38 -38,-30 -46,-38" fill="#f8fafc" />
+              <polygon points="-30,4 28,4 24,-9 -26,-9" fill="#f8fafc" />
+            </g>
+
+            <g id="accessory-party-hat" class="festive-accessory" transform="translate(534, 271) rotate(9.5)">
+              <polygon points="-22,3 22,3 0,-56" fill="#06b6d4" />
+              <polygon points="-14,-14 14,-14 9,-28 -9,-28" fill="#facc15" />
+              <polygon points="0,-68 7,-58 0,-48 -7,-58" fill="#f472b6" />
+            </g>
+
+            <g id="accessory-heart" class="festive-accessory" transform="translate(535, 224)">
+              <polygon points="0,14 -20,-6 -10,-20 0,-10 10,-20 20,-6" fill="var(--accent-1, #fb7185)" />
+            </g>
+          </g>
+        </g>
+      </svg>
+
+      <div class="wordmark">
+        <span>Zunz</span><span class="wordmark-accent">Shot</span>
+      </div>
+
+      <div id="festiveBadge" class="festive-badge">
+        <span class="festive-dot" aria-hidden="true"></span>
+        <span id="festiveBadgeText"></span>
+      </div>
+    </div>
+
+    <script>
+      (function applyThemeFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const setStop = (id, color) => {
+          const el = color ? document.getElementById(id) : null;
+          if (el) el.setAttribute("stop-color", color);
+        };
+
+        const a1 = params.get("a1");
+        const a2 = params.get("a2");
+        if (a1) {
+          document.documentElement.style.setProperty("--accent-1", a1);
+          const ring = document.getElementById("impact-ring");
+          if (ring) ring.setAttribute("stroke", a1);
+        }
+        if (a2) {
+          document.documentElement.style.setProperty("--accent-2", a2);
+        }
+
+        const cb = params.get("cb");
+        if (cb) {
+          document.documentElement.style.setProperty("--badge-border", cb);
+          const strokePath = document.getElementById("card-accent-stroke");
+          if (strokePath) strokePath.setAttribute("stroke", cb);
+        }
+
+        const f1 = params.get("f1");
+        const f2 = params.get("f2");
+        if (f1) {
+          setStop("flowerFillStart", f1);
+          setStop("flowerFillMid", f1);
+        }
+        if (f2) {
+          setStop("flowerFillEnd", f2);
+          setStop("bracketStop1", f2);
+          setStop("bracketStop2", f2);
+        }
+
+        const fa = params.get("fa");
+        if (fa) {
+          setStop("auraStop2", fa);
+          setStop("auraStop3", fa);
+          setStop("auraStop4", fa);
+          const glowRect = document.getElementById("flower-glow-rect");
+          if (glowRect) glowRect.setAttribute("fill", fa);
+        }
+
+        const bg = params.get("bg");
+        if (bg) {
+          setStop("bgGlowStop1", bg);
+          setStop("bgGlowStop2", bg);
+          setStop("bgGlowStop3", bg);
+          const halo = document.getElementById("bird-halo");
+          if (halo) halo.setAttribute("fill", bg);
+        }
+
+        const acc = params.get("acc");
+        if (acc) {
+          const accEl = document.getElementById(`accessory-${acc}`);
+          if (accEl) accEl.classList.add("is-active");
+        }
+
+        const pt = params.get("pt");
+        if (pt) {
+          const ptEl = document.getElementById(`particles-${pt}`);
+          if (ptEl) ptEl.classList.add("is-active");
+        }
+
+        const badge = params.get("badge");
+        if (badge) {
+          const badgeEl = document.getElementById("festiveBadge");
+          const badgeText = document.getElementById("festiveBadgeText");
+          if (badgeEl && badgeText) {
+            badgeText.textContent = badge;
+            badgeEl.classList.add("is-visible");
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

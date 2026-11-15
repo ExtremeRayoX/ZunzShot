@@ -1731,6 +1731,17 @@ body,
   line-height: 1.45;
 }
 
+.nested-checkbox-row {
+  margin-left: 24px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.checkbox-row.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .dock-tooltip {
   position: fixed;
   z-index: 70;

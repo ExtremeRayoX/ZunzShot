@@ -28,6 +28,8 @@ export interface AppSettings {
   launchAtStartup: boolean;
   showMagnifier: boolean;
   ultraLightMode: boolean;
+  startupAnimation: boolean;
+  festiveThemes: boolean;
   autoCheckUpdates: boolean;
   updaterPromptShown: boolean;
   clockFormat24h: boolean;

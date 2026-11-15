@@ -69,6 +69,10 @@ pub struct AppSettings {
     pub show_magnifier: bool,
     #[serde(default)]
     pub ultra_light_mode: bool,
+    #[serde(default = "default_true")]
+    pub startup_animation: bool,
+    #[serde(default = "default_true")]
+    pub festive_themes: bool,
     #[serde(default)]
     pub auto_check_updates: bool,
     #[serde(default)]
@@ -114,6 +118,8 @@ impl AppSettings {
             launch_at_startup: false,
             show_magnifier: true,
             ultra_light_mode: false,
+            startup_animation: true,
+            festive_themes: true,
             auto_check_updates: false,
             updater_prompt_shown: false,
             clock_format_24h: false,
@@ -128,7 +134,7 @@ impl AppSettings {
     }
 }
 
-fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

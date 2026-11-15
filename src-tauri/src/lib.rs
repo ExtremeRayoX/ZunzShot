@@ -1,6 +1,7 @@
 mod capture;
 mod i18n;
 mod settings;
+mod splash;
 
 use arboard::{Clipboard, ImageData};
 use capture::{CaptureMetadata, CaptureSession};
@@ -31,7 +32,7 @@ const SINGLE_INSTANCE_ADDR: &str = "127.0.0.1:45893";
 static UPDATE_SENSOR_STARTED: AtomicBool = AtomicBool::new(false);
 static UPDATE_SENSOR_SIGNAL: std::sync::LazyLock<(Mutex<u64>, std::sync::Condvar)> =
     std::sync::LazyLock::new(|| (Mutex::new(0), std::sync::Condvar::new()));
-static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+pub(crate) static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static SHORTCUTS_PAUSED: AtomicBool = AtomicBool::new(false);
 static SHORTCUT_OP_LOCK: std::sync::LazyLock<Mutex<()>> =
     std::sync::LazyLock::new(|| Mutex::new(()));
@@ -626,7 +627,7 @@ fn show_configured_window<F>(
     }
 }
 
-fn show_settings_window(app: &AppHandle) {
+pub(crate) fn show_settings_window(app: &AppHandle) {
     show_configured_window(
         app,
         "main",
@@ -803,8 +804,13 @@ fn trigger_capture(app: AppHandle, mode: String) {
         return;
     }
 
+    let had_splash = splash::dismiss_splash_before_capture(&app);
+
     std::thread::spawn(move || {
         let _capture_guard = CaptureInProgressGuard;
+        if had_splash {
+            std::thread::sleep(Duration::from_millis(60));
+        }
 
         *LAST_OVERLAY_RECT.lock().unwrap() = None;
         #[cfg(target_os = "macos")]
@@ -1045,6 +1051,11 @@ fn save_settings_cmd(
     refresh_tray_menu(&app);
     register_shortcuts(&app, &new_settings);
     let _ = app.emit("zunzshot://settings-updated", &new_settings);
+    if !new_settings.festive_themes {
+        splash::clear_cached_manifest(&app);
+    } else if !new_settings.ultra_light_mode && new_settings.startup_animation {
+        splash::trigger_festive_theme_sync(&app, 1);
+    }
     if new_settings.auto_check_updates {
         trigger_update_sensor(&app, 1);
     }
@@ -1801,7 +1812,7 @@ fn copy_text_to_clipboard(text: String) -> Result<(), String> {
     })
 }
 
-fn encode_query_component(input: &str) -> String {
+pub(crate) fn encode_query_component(input: &str) -> String {
     let mut out = String::with_capacity(input.len() * 2);
     for b in input.as_bytes() {
         match *b {
@@ -3150,29 +3161,60 @@ pub fn run() {
 
             register_shortcuts(app.handle(), &initial_settings);
 
-            // Pre-create the capture overlay for instant 0ms response unless Ultra-Light Mode is enabled.
-            if !initial_settings.ultra_light_mode {
-                #[cfg(target_os = "windows")]
-                {
-                    let ov_handle = app.handle().clone();
-                    std::thread::spawn(move || {
+            let pending_settings_window = show_welcome || !initial_perm;
+            let splash_url = splash::resolve_startup_splash_url(app.handle(), &initial_settings);
+            let has_splash = splash_url.is_some();
+
+            // Launch startup splash (if enabled and not in Ultra-Light Mode) before overlay pre-warm
+            // on Windows so WebView2 initializes sequentially without competing at process startup.
+            #[cfg(target_os = "windows")]
+            {
+                let ov_handle = app.handle().clone();
+                let preload_overlay = !initial_settings.ultra_light_mode;
+                std::thread::spawn(move || {
+                    if let Some(url) = splash_url {
+                        splash::show_startup_splash_sync(
+                            &ov_handle,
+                            url,
+                            pending_settings_window,
+                        );
+                        if preload_overlay {
+                            std::thread::sleep(Duration::from_millis(350));
+                        }
+                    }
+                    if preload_overlay {
                         let _ = ensure_overlay_window(&ov_handle);
-                    });
+                    }
+                });
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                if let Some(url) = splash_url {
+                    splash::show_startup_splash_sync(
+                        app.handle(),
+                        url,
+                        pending_settings_window,
+                    );
                 }
-                #[cfg(not(target_os = "windows"))]
-                {
+                if !initial_settings.ultra_light_mode {
                     let _ = ensure_overlay_window(app.handle());
                 }
             }
 
-            // Lazily create the Settings window only when onboarding or permission prompt is required;
-            // otherwise keep it unloaded so ZunzShot uses far less memory while idle in the tray.
-            if show_welcome || !initial_perm {
+            // Defer onboarding / permission prompt until the startup splash completes so nothing opens behind it.
+            if !has_splash && pending_settings_window {
                 show_settings_window(app.handle());
             }
 
             if initial_settings.auto_check_updates {
                 trigger_update_sensor(app.handle(), 6);
+            }
+
+            if !initial_settings.ultra_light_mode
+                && initial_settings.startup_animation
+                && initial_settings.festive_themes
+            {
+                splash::trigger_festive_theme_sync(app.handle(), 10);
             }
 
             Ok(())

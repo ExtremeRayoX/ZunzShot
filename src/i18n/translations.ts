@@ -109,6 +109,10 @@ export const TRANSLATIONS = {
     ultraLightLabel: "Modo ultra liviano (liberar memoria al cerrar captura)",
     ultraLightHint:
       "Indicación: al activarlo, ZunzShot destruye el motor de captura al terminar cada recorte para reducir el consumo en reposo a ~25–35 MB de RAM. Una nueva captura puede tardar una fracción de segundo más en abrir.",
+    startupAnimationLabel: "Mostrar animación de inicio al abrir la aplicación",
+    startupAnimationUltraLightHint: "Desactivada automáticamente en Modo ultra liviano",
+    festiveThemesLabel:
+      "Sincronizar versiones festivas del logo (Halloween, Navidad, etc.) sin actualizar la app",
     clockDefaultsTitle: "Configuración predeterminada del Sticker de Hora",
     clockFormat24h: "Formato 24 horas",
     clockShowSeconds: "Mostrar segundos",
@@ -377,6 +381,10 @@ export const TRANSLATIONS = {
     ultraLightLabel: "Ultra-light mode (free capture memory after closing)",
     ultraLightHint:
       "Note: when enabled, ZunzShot unloads the capture engine after each screenshot to cut idle RAM down to ~25–35 MB. Opening the next capture may take a split second longer.",
+    startupAnimationLabel: "Show startup logo animation when launching the app",
+    startupAnimationUltraLightHint: "Automatically skipped in Ultra-light mode",
+    festiveThemesLabel:
+      "Sync seasonal festive logo themes (Halloween, Holidays, etc.) without app updates",
     clockDefaultsTitle: "Default Timestamp Sticker Preferences",
     clockFormat24h: "24-hour clock",
     clockShowSeconds: "Show seconds",
