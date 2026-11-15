@@ -1,4 +1,21 @@
 {
   "schemaVersion": 1,
-  "themes": []
+  "themes": [
+    {
+      "id": "christmas-2026",
+      "startDate": "2026-12-01",
+      "endDate": "2026-12-26",
+      "badgeEs": "Edición Navidad",
+      "badgeEn": "Christmas Edition",
+      "accentColor": "#f87171",
+      "accentSecondary": "#4ade80",
+      "flowerColorStart": "#ffffff",
+      "flowerColorEnd": "#bbf7d0",
+      "flowerAuraColor": "#4ade80",
+      "birdGlowColor": "#f87171",
+      "cardBorderColor": "rgba(248, 113, 113, 0.55)",
+      "accessory": "santa-hat",
+      "particles": "snow"
+    }
+  ]
 }
