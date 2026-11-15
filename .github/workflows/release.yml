@@ -60,9 +60,9 @@ jobs:
             - **Windows (Instalador oficial):** `ZunzShot___VERSION___x64-setup.exe`
 
             ### Novedades incluidas
-            - **Animación de inicio ("Desde fuera"):** Al abrir ZunzShot o iniciarse con el sistema, la flor del logo brota sobre el escritorio, el colibrí vuela desde fuera con aleteo fluido hasta picarla y revela la tarjeta con el logotipo **ZunzShot**. No interrumpe capturas ni reaperturas de configuración, y se omite automáticamente en *Modo Ultra Ligero*.
-            - **Temas festivos estacionales sin reinstalar:** ZunzShot puede lucir ediciones temporales (Halloween, Navidad, Año Nuevo, San Valentín, etc.) descargando de forma silenciosa una configuración declarativa segura (`splash-festive.json`) con caché local e instantánea.
-            - **Control en Configuración:** Desde *General* puedes activar o desactivar la animación de inicio y los temas festivos en cualquier momento.
+            - **Animación de bienvenida al iniciar (macOS y Windows):** ZunzShot ahora muestra brevemente su logotipo animado al abrir la aplicación o iniciar con el equipo, sin robar foco ni interrumpir capturas.
+            - **Ediciones festivas automáticas:** En fechas señaladas *(Halloween, Navidad, Año Nuevo, etc.)*, la pantalla de inicio luce detalles especiales de temporada sin necesidad de actualizar la aplicación.
+            - **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento *(se omiten automáticamente al usar **Modo ultra liviano**)*.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

@@ -47,7 +47,7 @@ ZunzShot está diseñado bajo un enfoque **local-first** para proteger tu pantal
 - **Procesamiento 100 % en tu equipo:** Todas las capturas, anotaciones, stickers, textos y recortes se procesan y guardan exclusivamente de forma local (RAM, portapapeles o la carpeta que elijas).
 - **Sin nube ni terceros:** Tus imágenes nunca se suben ni se comparten con servidores externos salvo que tú mismo uses la acción de **Compartir** o **Guardar**.
 - **Sin telemetría ni rastreo:** No recopila estadísticas de uso, analítica, publicidad ni requiere cuentas o inicio de sesión.
-- **Conexión de red opcional únicamente para actualizaciones y temas festivos:** Las únicas conexiones externas posibles consultan este repositorio oficial en GitHub (`ExtremeRayoX/ZunzShot`) para buscar actualizaciones de la aplicación o sincronizar el manifiesto declarativo de temas festivos en caché (ambas opciones se pueden desactivar en **Ajustes**).
+- **Conexión de red opcional únicamente para actualizaciones y temas festivos:** Las únicas conexiones externas posibles consultan este repositorio oficial en GitHub (`ExtremeRayoX/ZunzShot`) para buscar actualizaciones de la aplicación o consultar ediciones festivas de temporada *(ambas opciones se pueden desactivar en **Ajustes**)*.
 
 ---
 
@@ -116,9 +116,9 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 ## Notas de Versión
 
 ### `v1.1.0`
-- **Animación de bienvenida al iniciar (macOS y Windows):** Al iniciar ZunzShot (manualmente o con el sistema), brota la flor de captura y el colibrí origami entra volando desde fuera para picarla y formar el logotipo completo de **ZunzShot** antes de desvanecerse suavemente sin robar foco ni interferir con capturas.
-- **Temas festivos sin actualizar la aplicación:** Sistema declarativo y seguro con caché local por fechas en [`assets/splash-festive.json`](assets/splash-festive.json) para activar ediciones de temporada *(Halloween, Navidad, Año Nuevo, etc.)* en el siguiente arranque sin obligar a instalar actualizaciones.
-- **Integración con Modo ultra liviano y Ajustes:** En **Modo ultra liviano** se omite la animación para no abrir WebViews al arranque, y desde **Ajustes → General** puedes activar o desactivar tanto la animación de inicio como la sincronización festiva.
+- **Animación de bienvenida al iniciar (macOS y Windows):** ZunzShot ahora muestra brevemente su logotipo animado al abrir la aplicación o iniciar con el equipo, sin robar foco ni interferir con tus capturas.
+- **Ediciones festivas automáticas:** En fechas señaladas *(Halloween, Navidad, Año Nuevo, etc.)*, la pantalla de inicio luce detalles especiales de temporada sin necesidad de actualizar la aplicación.
+- **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento *(se omiten automáticamente al usar **Modo ultra liviano**)*.
 
 > **Historial completo:** Consulta todas las versiones anteriores (`v1.0.0` – `v1.0.9`) en [CHANGELOG.md](CHANGELOG.md) o en [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
 

@@ -47,7 +47,7 @@ ZunzShot is built with a **local-first** architecture to keep your screen and fi
 - **100% local processing:** All screenshots, annotations, stickers, text labels, and exports are processed and kept strictly on your machine (RAM, system clipboard, or your chosen save folder).
 - **No cloud or third-party servers:** Your captures are never uploaded or shared externally unless you explicitly trigger **Share** or **Save**.
 - **Zero telemetry or tracking:** No usage analytics, ads, background data collection, or accounts required.
-- **Optional network check solely for updates and festive themes:** The only outbound requests contact this official GitHub repository (`ExtremeRayoX/ZunzShot`) to check for app updates or sync the cached declarative festive splash manifest (both can be turned off in **Settings**).
+- **Optional network check solely for updates and festive themes:** The only outbound requests contact this official GitHub repository (`ExtremeRayoX/ZunzShot`) to check for app updates or seasonal festive editions *(both can be turned off in **Settings**)*.
 
 ---
 
@@ -116,9 +116,9 @@ When triggering a capture, ZunzShot opens a floating overlay with **capture mode
 ## Release Notes
 
 ### `v1.1.0`
-- **Startup welcome animation (macOS & Windows):** Launching ZunzShot (manually or at system startup) blooms the capture flower and flies the origami hummingbird in from outside to touch it, forming the **ZunzShot** logo before fading out cleanly without stealing focus or getting in the way of captures.
-- **No-update seasonal festive themes:** Safe declarative JSON manifest & local date-checked cache ([`assets/splash-festive.json`](assets/splash-festive.json)) so seasonal themes *(Halloween, Holidays, New Year, etc.)* appear automatically on next launch without shipping a full installer update.
-- **Ultra-Light Mode & Settings controls:** *Ultra-light mode* automatically skips the startup splash so no WebView runs on boot, and **Settings → General** provides individual toggles for startup animation and festive theme sync.
+- **Startup welcome animation (macOS & Windows):** ZunzShot now briefly displays its animated logo when launching the app or starting with your computer, without stealing focus or getting in the way of captures.
+- **Automatic seasonal festive editions:** During special dates *(Halloween, Holidays, New Year, etc.)*, the startup screen automatically displays seasonal themes without requiring an app update.
+- **Options in Settings → General:** Toggle the startup animation and festive themes anytime *(automatically skipped when **Ultra-light mode** is enabled)*.
 
 > **Full history:** Browse all previous releases (`v1.0.0` – `v1.0.9`) in [CHANGELOG.en.md](CHANGELOG.en.md) or on [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
 
