@@ -45,6 +45,15 @@ pub struct CapturedScreenSlice {
     pub rgba: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PhysicalMonitorBounds {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub scale: f64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureMetadata {
@@ -59,12 +68,14 @@ pub struct CaptureMetadata {
     pub active_monitor: Option<MonitorNormalizedRect>,
     pub active_screen_index: usize,
     pub screens: Vec<CapturedScreenInfo>,
+    pub monitors: Vec<MonitorNormalizedRect>,
     pub windows: Vec<WindowCandidate>,
 }
 
 pub struct CaptureSession {
     pub metadata: CaptureMetadata,
     pub screen_slices: Vec<CapturedScreenSlice>,
+    pub monitor_bounds: Vec<PhysicalMonitorBounds>,
     pub virt_logical_x: f64,
     pub virt_logical_y: f64,
     pub monitor_phys_x: i32,
@@ -77,6 +88,17 @@ pub struct CaptureSession {
     pub toast_phys_h: u32,
     pub toast_scale: f64,
     pub toast_display_id: u32,
+}
+
+/// Finds the monitor index containing `(x, y)` in the same coordinate space as `bounds`.
+pub fn find_monitor_index_at_point(
+    bounds: &[PhysicalMonitorBounds],
+    x: f64,
+    y: f64,
+) -> Option<usize> {
+    bounds.iter().position(|b| {
+        x >= b.x && x < (b.x + b.w) && y >= b.y && y < (b.y + b.h)
+    })
 }
 
 /// Captures all connected displays:
@@ -287,25 +309,33 @@ fn capture_all_monitors_windows(app: &AppHandle, mode: &str) -> Result<CaptureSe
     let virt_w = (virt_right - virt_x).max(1) as u32;
     let virt_h = (virt_bottom - virt_y).max(1) as u32;
 
-    let active_idx = cursor
-        .and_then(|pos| {
-            slices.iter().position(|s| {
-                pos.x >= s.x as f64
-                    && pos.x < (s.x as f64 + s.w as f64)
-                    && pos.y >= s.y as f64
-                    && pos.y < (s.y as f64 + s.h as f64)
-            })
+    let monitors: Vec<MonitorNormalizedRect> = slices
+        .iter()
+        .map(|s| MonitorNormalizedRect {
+            rx: (s.x - virt_x) as f64 / virt_w as f64,
+            ry: (s.y - virt_y) as f64 / virt_h as f64,
+            rw: s.w as f64 / virt_w as f64,
+            rh: s.h as f64 / virt_h as f64,
         })
+        .collect();
+    let monitor_bounds: Vec<PhysicalMonitorBounds> = slices
+        .iter()
+        .map(|s| PhysicalMonitorBounds {
+            x: s.x as f64,
+            y: s.y as f64,
+            w: s.w as f64,
+            h: s.h as f64,
+            scale: s.scale,
+        })
+        .collect();
+
+    let active_idx = cursor
+        .and_then(|pos| find_monitor_index_at_point(&monitor_bounds, pos.x, pos.y))
         .or_else(|| slices.iter().position(|s| s.is_primary))
         .unwrap_or(0);
 
     let active_mon = &slices[active_idx];
-    let active_monitor = Some(MonitorNormalizedRect {
-        rx: (active_mon.x - virt_x) as f64 / virt_w as f64,
-        ry: (active_mon.y - virt_y) as f64 / virt_h as f64,
-        rw: active_mon.w as f64 / virt_w as f64,
-        rh: active_mon.h as f64 / virt_h as f64,
-    });
+    let active_monitor = monitors.get(active_idx).cloned();
     let toast_phys_x = active_mon.x;
     let toast_phys_y = active_mon.y;
     let toast_phys_w = active_mon.w;
@@ -392,12 +422,14 @@ fn capture_all_monitors_windows(app: &AppHandle, mode: &str) -> Result<CaptureSe
             active_monitor,
             active_screen_index: 0,
             screens: vec![virt_screen.clone()],
+            monitors,
             windows,
         },
         screen_slices: vec![CapturedScreenSlice {
             info: virt_screen,
             rgba: rgba_bytes,
         }],
+        monitor_bounds,
         virt_logical_x: virt_x as f64 / init_scale,
         virt_logical_y: virt_y as f64 / init_scale,
         monitor_phys_x: virt_x,
@@ -567,13 +599,28 @@ fn capture_all_monitors_macos(app: &AppHandle, mode: &str) -> Result<CaptureSess
         screens.push(info);
     }
 
+    let monitors: Vec<MonitorNormalizedRect> = screens
+        .iter()
+        .map(|s| MonitorNormalizedRect {
+            rx: s.lx / virt_lw,
+            ry: s.ly / virt_lh,
+            rw: s.lw / virt_lw,
+            rh: s.lh / virt_lh,
+        })
+        .collect();
+    let monitor_bounds: Vec<PhysicalMonitorBounds> = screens
+        .iter()
+        .map(|s| PhysicalMonitorBounds {
+            x: virt_lx + s.lx,
+            y: virt_ly + s.ly,
+            w: s.lw,
+            h: s.lh,
+            scale: s.scale_factor,
+        })
+        .collect();
+
     let active_info = &screens[active_screen_index];
-    let active_monitor = Some(MonitorNormalizedRect {
-        rx: active_info.lx / virt_lw,
-        ry: active_info.ly / virt_lh,
-        rw: active_info.lw / virt_lw,
-        rh: active_info.lh / virt_lh,
-    });
+    let active_monitor = monitors.get(active_screen_index).cloned();
 
     let scale_factor = active_info.scale_factor;
     let (image_width, image_height) = if screens.len() == 1 {
@@ -600,9 +647,11 @@ fn capture_all_monitors_macos(app: &AppHandle, mode: &str) -> Result<CaptureSess
             active_monitor,
             active_screen_index,
             screens: screens.clone(),
+            monitors,
             windows,
         },
         screen_slices,
+        monitor_bounds,
         virt_logical_x: virt_lx,
         virt_logical_y: virt_ly,
         monitor_phys_x: (virt_lx * primary_scale).round() as i32,
@@ -977,5 +1026,29 @@ mod tests {
         assert_eq!(pixel_at(&buf, w, 10, 80), [6, 10, 20, 255]);
         // Bottom-right quadrant (x=80 >= 50, y=80 >= 20) comes from screen 1
         assert_eq!(pixel_at(&buf, w, 80, 80), [10, 200, 210, 255]);
+    }
+
+    #[test]
+    fn find_monitor_index_at_point_matches_cursor_screen() {
+        let bounds = vec![
+            PhysicalMonitorBounds {
+                x: -1920.0,
+                y: 0.0,
+                w: 1920.0,
+                h: 1080.0,
+                scale: 1.0,
+            },
+            PhysicalMonitorBounds {
+                x: 0.0,
+                y: 0.0,
+                w: 1512.0,
+                h: 982.0,
+                scale: 2.0,
+            },
+        ];
+        assert_eq!(find_monitor_index_at_point(&bounds, -500.0, 400.0), Some(0));
+        assert_eq!(find_monitor_index_at_point(&bounds, 0.0, 0.0), Some(1));
+        assert_eq!(find_monitor_index_at_point(&bounds, 1511.9, 981.9), Some(1));
+        assert_eq!(find_monitor_index_at_point(&bounds, 1512.0, 500.0), None);
     }
 }

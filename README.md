@@ -10,28 +10,28 @@
 
 **Capturador de pantalla instantáneo, ultra liviano y creativo para macOS y Windows.**
 
-[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v110)
-[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v110)
+[![Versión](https://img.shields.io/github/v/release/ExtremeRayoX/ZunzShot?label=Versi%C3%B3n&color=06d6c6&style=for-the-badge)](#descargas-v111)
+[![Plataformas](https://img.shields.io/badge/macOS_%7C_Windows-Descarga_Directa-10b981?style=for-the-badge)](#descargas-v111)
 [![English README](https://img.shields.io/badge/Idioma-Espa%C3%B1ol_%7C_English-6366f1?style=for-the-badge)](README.en.md)
 
 <br />
 
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.1.0 para Windows" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.1/ZunzShot_1.1.1_x64-setup.exe"><img src="docs/icons/download-windows.svg" alt="Descargar ZunzShot v1.1.1 para Windows" width="320" /></a>
 &nbsp;&nbsp;
-<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.1.0 para macOS" width="320" /></a>
+<a href="https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.1/ZunzShot_1.1.1_universal.dmg"><img src="docs/icons/download-macos.svg" alt="Descargar ZunzShot v1.1.1 para macOS" width="320" /></a>
 
 </div>
 
 ---
 
-## Descargas (`v1.1.0`)
+## Descargas (`v1.1.1`)
 
-Versión actual disponible: **ZunzShot v1.1.0**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
+Versión actual disponible: **ZunzShot v1.1.1**. Haz clic directamente en la imagen de tu sistema operativo arriba o en tu instalador abajo para iniciar la **descarga directa al instante** *(sin páginas intermedias)*:
 
-| Sistema | Plataforma | Descarga directa (`v1.1.0`) | Detalles |
+| Sistema | Plataforma | Descarga directa (`v1.1.1`) | Detalles |
 | :---: | :--- | :--- | :--- |
-| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.1.0 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
-| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.1.0 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.0/ZunzShot_1.1.0_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
+| <img src="docs/icons/os-windows.svg" width="26" height="26" alt="Windows" /> | **Windows 10 / 11 (64-bit)** | [Descargar v1.1.1 (.exe)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.1/ZunzShot_1.1.1_x64-setup.exe) | Instalador oficial compacto con selector de idioma (**Español / English**) y actualizaciones automáticas. |
+| <img src="docs/icons/os-macos.svg" width="26" height="26" alt="macOS" /> | **macOS 12.3+ (Apple Silicon e Intel)** | [Descargar v1.1.1 para macOS (.dmg)](https://github.com/ExtremeRayoX/ZunzShot/releases/download/v1.1.1/ZunzShot_1.1.1_universal.dmg) | Arrastra **ZunzShot** a **Aplicaciones** y otorga permiso de **Grabación de Pantalla** la primera vez. |
 
 > **Nota para macOS:** Si al abrir por primera vez aparece un aviso de desarrollador no verificado, haz **clic derecho → Abrir** sobre la app en Aplicaciones o ejecuta en Terminal:
 > ```bash
@@ -104,23 +104,23 @@ Al activar una captura aparece la interfaz flotante con los **modos de captura**
 
 | Ícono | Acción | Atajo macOS | Atajo Windows | Para qué sirve |
 | :---: | :--- | :---: | :---: | :--- |
-| <img src="docs/icons/action-copy.svg" width="26" height="26" alt="Copiar captura" /> | **Copiar** | `⌘ + C` | `Ctrl + C` | Copia la captura final con todas sus anotaciones y stickers al portapapeles. |
+| <img src="docs/icons/action-close.svg" width="26" height="26" alt="Cerrar captura" /> | **Cancelar / Cerrar** | `Esc` | `Esc` | Cierra la captura limpia y vuelve al estado en segundo plano sin dejar rastros. |
 | <img src="docs/icons/action-save.svg" width="26" height="26" alt="Guardar imagen" /> | **Guardar** | `⌘ + S` | `Ctrl + S` | Exporta la captura a disco en formato **PNG** o **JPG** en la carpeta que prefieras. |
 | <img src="docs/icons/action-pin.svg" width="26" height="26" alt="Fijar en pantalla" /> | **Fijar en pantalla (Pin)** | `⌘ + ⇧ + P` | `Ctrl + Shift + P` | Convierte el recorte en una ventana flotante siempre visible sobre tus demás apps *(con control de opacidad y copiado rápido)*. |
 | <img src="docs/icons/action-share.svg" width="26" height="26" alt="Compartir" /> | **Compartir** | `⌘ + ⇧ + E` | `Ctrl + Shift + E` | Abre las opciones de uso compartido del sistema para enviar la captura al instante. |
 | <img src="docs/icons/action-print.svg" width="26" height="26" alt="Imprimir" /> | **Imprimir** | `⌘ + P` | `Ctrl + P` | Envía la captura directamente al diálogo de impresión del sistema. |
-| <img src="docs/icons/action-close.svg" width="26" height="26" alt="Cerrar captura" /> | **Cancelar / Cerrar** | `Esc` | `Esc` | Cierra la captura limpia y vuelve al estado en segundo plano sin dejar rastros. |
+| <img src="docs/icons/action-copy.svg" width="26" height="26" alt="Copiar captura" /> | **Copiar** | `⌘ + C` | `Ctrl + C` | Copia la captura final con todas sus anotaciones y stickers al portapapeles. |
 
 ---
 
 ## Notas de Versión
 
-### `v1.1.0`
-- **Animación de bienvenida al iniciar (macOS y Windows):** ZunzShot ahora muestra brevemente su logotipo animado al abrir la aplicación o iniciar con el equipo, sin robar foco ni interferir con tus capturas.
-- **Ediciones festivas automáticas:** En fechas señaladas *(Halloween, Navidad, Año Nuevo, etc.)*, la pantalla de inicio luce detalles especiales de temporada sin necesidad de actualizar la aplicación.
-- **Opciones en Ajustes → General:** Puedes activar o desactivar la animación de inicio y las ediciones festivas en cualquier momento (se omiten automáticamente al usar **Modo ultra liviano**).
+### `v1.1.1`
+- **Pantalla completa en el monitor actual:** Al activar la captura de pantalla completa con el atajo, ahora se selecciona únicamente la pantalla donde está tu cursor en lugar de abarcar todos los monitores conectados.
+- **Copiar más cerca al terminar de encuadrar:** Se intercambiaron las posiciones de **Copiar** y **Cancelar** en la barra lateral de acciones para tener **Copiar** abajo a la mano al soltar el recorte y **Cancelar** arriba, evitando cierres accidentales.
+- **Atajos de 3 teclas más cómodos:** Al personalizar tus atajos ahora puedes mantener combinaciones de 2, 3 o más teclas y soltarlas para guardar, con avisos visibles junto al campo correspondiente.
 
-> **Historial completo:** Consulta todas las versiones anteriores (`v1.0.0` – `v1.0.9`) en [CHANGELOG.md](CHANGELOG.md) o en [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
+> **Historial completo:** Consulta todas las versiones anteriores (`v1.0.0` – `v1.1.0`) en [CHANGELOG.md](CHANGELOG.md) o en [GitHub Releases](https://github.com/ExtremeRayoX/ZunzShot/releases).
 
 ---
 

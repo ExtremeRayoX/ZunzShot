@@ -8,6 +8,11 @@ Registro cronológico de novedades, mejoras y correcciones de ZunzShot. Puedes d
 
 ---
 
+## `v1.1.1`
+- **Pantalla completa en el monitor actual:** Al activar la captura de pantalla completa con el atajo, ahora se selecciona únicamente la pantalla donde está tu cursor en lugar de abarcar todos los monitores conectados.
+- **Copiar más cerca al terminar de encuadrar:** Se intercambiaron las posiciones de **Copiar** y **Cancelar** en la barra lateral de acciones para tener **Copiar** abajo a la mano al soltar el recorte y **Cancelar** arriba, evitando cierres accidentales.
+- **Atajos de 3 teclas más cómodos:** Al personalizar tus atajos ahora puedes mantener combinaciones de 2, 3 o más teclas y soltarlas para guardar, con avisos visibles junto al campo correspondiente.
+
 ## `v1.1.0`
 - **Animación de bienvenida al iniciar (macOS y Windows):** ZunzShot ahora muestra brevemente su logotipo animado al abrir la aplicación o iniciar con el equipo, sin robar foco ni interferir con tus capturas.
 - **Ediciones festivas automáticas:** En fechas señaladas *(Halloween, Navidad, Año Nuevo, etc.)*, la pantalla de inicio luce detalles especiales de temporada sin necesidad de actualizar la aplicación.

@@ -126,8 +126,186 @@ export function isModifierKeyEvent(e: KeyboardEvent): boolean {
     e.key === "Shift" ||
     e.key === "Control" ||
     e.key === "Alt" ||
-    e.key === "Meta"
+    e.key === "AltGraph" ||
+    e.key === "Meta" ||
+    e.key === "OS"
   );
+}
+
+const MODIFIER_ORDER = ["Command", "Super", "Control", "Alt", "Shift"] as const;
+const MODIFIER_TOKEN_SET = new Set<string>(MODIFIER_ORDER);
+
+export function isModifierToken(token: string): boolean {
+  return MODIFIER_TOKEN_SET.has(token);
+}
+
+export function orderModifiers(mods: Iterable<string>): string[] {
+  const unique = new Set(mods);
+  return MODIFIER_ORDER.filter((m) => unique.has(m));
+}
+
+export function getModifierTokenFromEvent(
+  e: Pick<KeyboardEvent, "code" | "key">,
+  platform: string
+): string | null {
+  if (
+    e.code === "MetaLeft" ||
+    e.code === "MetaRight" ||
+    e.key === "Meta" ||
+    e.key === "OS"
+  ) {
+    return platform === "macos" ? "Command" : "Super";
+  }
+  if (
+    e.code === "ControlLeft" ||
+    e.code === "ControlRight" ||
+    e.key === "Control"
+  ) {
+    return "Control";
+  }
+  if (
+    e.code === "AltLeft" ||
+    e.code === "AltRight" ||
+    e.key === "Alt" ||
+    e.key === "AltGraph"
+  ) {
+    return "Alt";
+  }
+  if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.key === "Shift") {
+    return "Shift";
+  }
+  return null;
+}
+
+export interface ShortcutChordState {
+  mods: string[];
+  mainToken: string | null;
+  unsupported: boolean;
+}
+
+export interface ChordStepResult {
+  state: ShortcutChordState;
+  liveTokens: string[];
+  commit: { mainToken: string; mods: string[] } | null;
+  unsupportedError: boolean;
+}
+
+export function createEmptyChordState(): ShortcutChordState {
+  return { mods: [], mainToken: null, unsupported: false };
+}
+
+export function getChordLiveTokens(state: ShortcutChordState): string[] {
+  return state.mainToken ? [...state.mods, state.mainToken] : [...state.mods];
+}
+
+export function stepChordKeyDown(
+  prev: ShortcutChordState,
+  e: KeyboardEvent,
+  platform: string
+): ChordStepResult {
+  const activeMods = new Set(getEventModifiers(e, platform));
+  const selfMod = getModifierTokenFromEvent(e, platform);
+  if (selfMod) activeMods.add(selfMod);
+
+  const mergedMods = orderModifiers([...prev.mods, ...activeMods]);
+
+  if (isModifierKeyEvent(e)) {
+    const next: ShortcutChordState = {
+      mods: mergedMods,
+      mainToken: prev.mainToken,
+      unsupported: prev.mainToken ? false : prev.unsupported,
+    };
+    return {
+      state: next,
+      liveTokens: getChordLiveTokens(next),
+      commit: null,
+      unsupportedError: false,
+    };
+  }
+
+  const token = resolveRecordedHotkeyToken(e);
+  if (!token) {
+    const next: ShortcutChordState = {
+      mods: mergedMods,
+      mainToken: prev.mainToken,
+      unsupported: !prev.mainToken,
+    };
+    return {
+      state: next,
+      liveTokens: getChordLiveTokens(next),
+      commit: null,
+      unsupportedError: !prev.mainToken,
+    };
+  }
+
+  const next: ShortcutChordState = {
+    mods: mergedMods,
+    mainToken: token,
+    unsupported: false,
+  };
+  return {
+    state: next,
+    liveTokens: getChordLiveTokens(next),
+    commit: null,
+    unsupportedError: false,
+  };
+}
+
+export function stepChordKeyUp(
+  prev: ShortcutChordState,
+  e: KeyboardEvent,
+  platform: string
+): ChordStepResult {
+  const remaining = new Set(getEventModifiers(e, platform));
+  const releasedMod = getModifierTokenFromEvent(e, platform);
+  if (releasedMod) {
+    remaining.delete(releasedMod);
+  }
+
+  // Windows/WebView2 often suppresses keydown for VK_SNAPSHOT and emits keyup only.
+  const upToken = resolveRecordedHotkeyToken(e);
+  let mainToken = prev.mainToken;
+  let mods = prev.mods;
+  if (upToken === "PrintScreen" && !mainToken) {
+    mainToken = "PrintScreen";
+    mods = orderModifiers([...prev.mods, ...getEventModifiers(e, platform)]);
+  }
+
+  const remainingOrdered = orderModifiers(remaining);
+
+  if (mainToken) {
+    if (remainingOrdered.length === 0) {
+      return {
+        state: createEmptyChordState(),
+        liveTokens: [...mods, mainToken],
+        commit: { mainToken, mods },
+        unsupportedError: false,
+      };
+    }
+    const next: ShortcutChordState = {
+      mods,
+      mainToken,
+      unsupported: false,
+    };
+    return {
+      state: next,
+      liveTokens: getChordLiveTokens(next),
+      commit: null,
+      unsupportedError: false,
+    };
+  }
+
+  const next: ShortcutChordState = {
+    mods: remainingOrdered,
+    mainToken: null,
+    unsupported: remainingOrdered.length > 0 ? prev.unsupported : false,
+  };
+  return {
+    state: next,
+    liveTokens: getChordLiveTokens(next),
+    commit: null,
+    unsupportedError: false,
+  };
 }
 
 export function getEventModifiers(e: KeyboardEvent, platform: string): string[] {

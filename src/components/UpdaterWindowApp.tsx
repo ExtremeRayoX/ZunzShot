@@ -17,7 +17,7 @@ type UpdaterLaunchPayload = {
 
 export const UpdaterWindowApp: React.FC = () => {
   const [lang, setLang] = useState<Language>("es");
-  const [appVersion, setAppVersion] = useState<string>("1.1.0");
+  const [appVersion, setAppVersion] = useState<string>("1.1.1");
   const [autoCheckUpdates, setAutoCheckUpdates] = useState<boolean>(false);
   const [ready, setReady] = useState<boolean>(false);
   const [launchMode, setLaunchMode] = useState<UpdaterLaunchMode>("manual");

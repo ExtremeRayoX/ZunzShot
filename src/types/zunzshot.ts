@@ -84,6 +84,7 @@ export interface CaptureMetadata {
   activeMonitor?: MonitorRect;
   activeScreenIndex?: number;
   screens?: CapturedScreenInfo[];
+  monitors?: MonitorRect[];
   windows: WindowCandidate[];
 }
 

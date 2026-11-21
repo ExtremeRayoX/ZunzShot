@@ -72,15 +72,15 @@ export const TRANSLATIONS = {
     },
     shortcutsTitle: "Atajos globales de teclado",
     shortcutHint:
-      "Haz clic en un atajo y presiona las teclas a la vez (siempre más de 1 tecla, ej. ⌘/Ctrl + Shift + tecla).",
+      "Haz clic en un atajo, mantén presionadas tus teclas (2 o más, ej. ⌘/Ctrl + Shift + tecla) y suéltalas para guardar.",
     shortcutHintWindows:
-      "Haz clic en un atajo y presiona las teclas a la vez (mín. 2 teclas, o Print Screen solo o combinado ej. Shift + PrtSc).",
+      "Haz clic en un atajo, mantén presionadas tus teclas (2 o más, o Print Screen solo o combinado) y suéltalas para guardar.",
     shortcutsOverlayTitle: "Comandos de barra lateral (dentro de captura)",
     shortcutsOverlayHint:
       "Configura teclas rápidas para copiar, guardar, fijar, compartir, imprimir o cerrar sin usar el mouse (1 tecla o combinación).",
-    shortcutRecordingPlaceholder: "Presiona teclas (mín. 2)...",
-    shortcutRecordingPlaceholderWindows: "Presiona teclas (mín. 2, o PrtSc)...",
-    shortcutOverlayRecordingPlaceholder: "Presiona tecla o combinación...",
+    shortcutRecordingPlaceholder: "Presiona 2 o más teclas y suelta...",
+    shortcutRecordingPlaceholderWindows: "Presiona 2+ teclas (o PrtSc) y suelta...",
+    shortcutOverlayRecordingPlaceholder: "Presiona tus teclas y suelta...",
     shortcutChangeBtn: "Cambiar",
     shortcutCancelBtn: "Cancelar",
     shortcutResetDefaultsBtn: "Restaurar predeterminados",
@@ -344,15 +344,15 @@ export const TRANSLATIONS = {
     },
     shortcutsTitle: "Global Keyboard Shortcuts",
     shortcutHint:
-      "Click a shortcut and press your key combo together (always more than 1 key, e.g. ⌘/Ctrl + Shift + key).",
+      "Click a shortcut, hold your keys together (2 or more, e.g. ⌘/Ctrl + Shift + key), and release to save.",
     shortcutHintWindows:
-      "Click a shortcut and press your key combo together (min 2 keys, or Print Screen alone or combined e.g. Shift + PrtSc).",
+      "Click a shortcut, hold your keys together (2 or more, or Print Screen alone or combined), and release to save.",
     shortcutsOverlayTitle: "Vertical Action Bar Commands (inside capture)",
     shortcutsOverlayHint:
       "Customize hotkeys to copy, save, pin, share, print, or close without reaching for the mouse (single key or combo).",
-    shortcutRecordingPlaceholder: "Press keys (min 2)...",
-    shortcutRecordingPlaceholderWindows: "Press keys (min 2, or PrtSc)...",
-    shortcutOverlayRecordingPlaceholder: "Press a key or combo...",
+    shortcutRecordingPlaceholder: "Press 2+ keys and release...",
+    shortcutRecordingPlaceholderWindows: "Press 2+ keys (or PrtSc) and release...",
+    shortcutOverlayRecordingPlaceholder: "Press key(s) and release...",
     shortcutChangeBtn: "Record",
     shortcutCancelBtn: "Cancel",
     shortcutResetDefaultsBtn: "Reset defaults",

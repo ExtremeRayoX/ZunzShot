@@ -8,6 +8,11 @@ Chronological history of ZunzShot features, improvements, and fixes. Installers 
 
 ---
 
+## `v1.1.1`
+- **Fullscreen capture on the active monitor:** Triggering fullscreen mode with its shortcut now selects only the screen where your cursor is located instead of spanning all connected displays.
+- **Easier Copy placement:** Swapped **Copy** and **Cancel** on the vertical action bar so **Copy** sits right at the bottom next to your cursor after framing a capture, while **Cancel** stays safely at the top.
+- **Smoother 3-key shortcut recording:** Customizing shortcuts now lets you hold 2, 3, or more keys together and release to save, with clear inline feedback right under the field.
+
 ## `v1.1.0`
 - **Startup welcome animation (macOS & Windows):** ZunzShot now briefly displays its animated logo when launching the app or starting with your computer, without stealing focus or getting in the way of captures.
 - **Automatic seasonal festive editions:** During special dates *(Halloween, Holidays, New Year, etc.)*, the startup screen automatically displays seasonal themes without requiring an app update.

@@ -36,15 +36,17 @@ import type {
   Language,
 } from "../types/zunzshot";
 import {
+  createEmptyChordState,
   DEFAULT_GLOBAL_SHORTCUTS,
   DEFAULT_OVERLAY_COMMANDS,
   formatKeyLabel,
   formatShortcutBadge,
   getEventModifiers,
-  isModifierKeyEvent,
+  isModifierToken,
   isSingleGlobalShortcutAllowed,
   normalizeAccelerator,
-  resolveRecordedHotkeyToken,
+  stepChordKeyDown,
+  stepChordKeyUp,
 } from "../utils/shortcuts";
 import { UpdaterPanel } from "./UpdaterPanel";
 
@@ -89,7 +91,7 @@ export const SettingsApp: React.FC = () => {
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [platform, setPlatform] = useState<string>("macos");
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [appVersion, setAppVersion] = useState<string>("1.1.0");
+  const [appVersion, setAppVersion] = useState<string>("1.1.1");
   const [tab, setTab] = useState<TabId>("capture");
   const [extrasSubView, setExtrasSubView] = useState<"list" | "clock" | "text">("list");
   const [savedBanner, setSavedBanner] = useState<boolean>(false);
@@ -99,6 +101,7 @@ export const SettingsApp: React.FC = () => {
   const [recordingField, setRecordingField] = useState<ShortcutFieldKey | null>(null);
   const [liveTokens, setLiveTokens] = useState<string[]>([]);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [shortcutErrorField, setShortcutErrorField] = useState<ShortcutFieldKey | null>(null);
   const [failedShortcuts, setFailedShortcuts] = useState<string[]>([]);
   const shortcutSavedRef = useRef<boolean>(false);
   const settingsRef = useRef<AppSettings | null>(null);
@@ -203,29 +206,47 @@ export const SettingsApp: React.FC = () => {
 
   const hasSettings = Boolean(settings);
 
-  // Pause global hotkeys while recording so pressed combos don't trigger screenshots,
-  // and mark keys live as they are pressed down.
+  const isRecordingShortcuts = Boolean(
+    recordingField && tab === "shortcuts" && hasSettings
+  );
+
+  // Keep global OS hotkeys (and macOS default window menu accelerators) paused cleanly
+  // across field switches without race conditions until recording actually ends.
+  useEffect(() => {
+    if (!isRecordingShortcuts) {
+      return;
+    }
+    shortcutSavedRef.current = false;
+    void invoke("set_shortcuts_paused", { paused: true }).catch(() => {});
+    return () => {
+      if (!shortcutSavedRef.current) {
+        void invoke("set_shortcuts_paused", { paused: false }).catch(() => {});
+      }
+    };
+  }, [isRecordingShortcuts]);
+
+  // Capture full multi-key chords (2, 3, or more keys) live while held and commit on release.
   useEffect(() => {
     if (!recordingField || tab !== "shortcuts" || !hasSettings) {
       return;
     }
 
-    shortcutSavedRef.current = false;
     let committed = false;
+    let chord = createEmptyChordState();
     const isOverlayCmd = (OVERLAY_CMD_FIELDS as readonly string[]).includes(
       recordingField
     );
-    void invoke("set_shortcuts_paused", { paused: true });
 
-    const tryCommitShortcut = (mainToken: string | null, mods: string[]) => {
-      if (committed) return;
+    const tryCommitShortcut = (mainToken: string | null, mods: string[]): boolean => {
+      if (committed) return true;
       const currentSettings = settingsRef.current;
-      if (!currentSettings) return;
+      if (!currentSettings) return false;
 
       if (!mainToken) {
         setLiveTokens(mods);
+        setShortcutErrorField(recordingField);
         setShortcutError(t.shortcutUnsupportedKey);
-        return;
+        return false;
       }
 
       if (
@@ -233,18 +254,17 @@ export const SettingsApp: React.FC = () => {
         mods.length === 0 &&
         !isSingleGlobalShortcutAllowed(mainToken, platform)
       ) {
-        setLiveTokens([mainToken]);
+        setLiveTokens([]);
+        setShortcutErrorField(recordingField);
         setShortcutError(
           platform === "windows"
             ? t.shortcutNeedMoreKeysWindows
             : t.shortcutNeedMoreKeys
         );
-        return;
+        return false;
       }
 
       const comboTokens = [...mods, mainToken];
-      setLiveTokens(comboTokens);
-
       const nextCombo = comboTokens.join("+");
       const nextNorm = normalizeAccelerator(nextCombo, platform);
       const groupFields: readonly ShortcutFieldKey[] = isOverlayCmd
@@ -256,10 +276,12 @@ export const SettingsApp: React.FC = () => {
           normalizeAccelerator(currentSettings[f], platform) === nextNorm
       );
       if (hasConflict) {
+        setLiveTokens([]);
+        setShortcutErrorField(recordingField);
         setShortcutError(
           isOverlayCmd ? t.shortcutOverlayDuplicateErr : t.shortcutDuplicateErr
         );
-        return;
+        return false;
       }
 
       committed = true;
@@ -269,51 +291,68 @@ export const SettingsApp: React.FC = () => {
       setRecordingField(null);
       setLiveTokens([]);
       setShortcutError(null);
-      void invoke("set_shortcuts_paused", { paused: false }).catch(() => {});
+      setShortcutErrorField(null);
+      return true;
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      if (e.repeat) return;
 
       const currentSettings = settingsRef.current;
       if (!currentSettings) return;
 
-      const mods = getEventModifiers(e, platform);
+      const currentMods = getEventModifiers(e, platform);
 
       // Esc alone cancels recording (unless explicitly re-assigning Escape to cmdCancel)
       const allowEscapeBind =
         recordingField === "cmdCancel" && currentSettings.cmdCancel !== "Escape";
-      if (e.code === "Escape" && mods.length === 0 && !allowEscapeBind) {
+      if (
+        e.code === "Escape" &&
+        currentMods.length === 0 &&
+        chord.mods.length === 0 &&
+        !chord.mainToken &&
+        !allowEscapeBind
+      ) {
         setRecordingField(null);
         setLiveTokens([]);
         setShortcutError(null);
+        setShortcutErrorField(null);
         return;
       }
 
-      // Modifier pressed: show held keys live as they are pressed
-      if (isModifierKeyEvent(e)) {
-        setLiveTokens(mods);
-        if (mods.length > 0) setShortcutError(null);
-        return;
+      const step = stepChordKeyDown(chord, e, platform);
+      chord = step.state;
+      setLiveTokens(step.liveTokens);
+      if (step.unsupportedError) {
+        setShortcutErrorField(recordingField);
+        setShortcutError(t.shortcutUnsupportedKey);
+      } else if (step.liveTokens.length > 0) {
+        setShortcutError(null);
+        setShortcutErrorField(null);
       }
-
-      tryCommitShortcut(resolveRecordedHotkeyToken(e), mods);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      // Windows/WebView2 often suppresses keydown for VK_SNAPSHOT and emits keyup only.
-      const token = resolveRecordedHotkeyToken(e);
-      if (token === "PrintScreen" && !committed) {
-        e.preventDefault();
-        e.stopPropagation();
-        tryCommitShortcut(token, getEventModifiers(e, platform));
+      if (committed) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const step = stepChordKeyUp(chord, e, platform);
+      chord = step.state;
+      if (step.commit) {
+        const ok = tryCommitShortcut(step.commit.mainToken, step.commit.mods);
+        if (!ok) {
+          chord = createEmptyChordState();
+        }
         return;
       }
-      setLiveTokens(getEventModifiers(e, platform));
+      setLiveTokens(step.liveTokens);
     };
 
     const onBlur = () => {
+      chord = createEmptyChordState();
       setRecordingField(null);
       setLiveTokens([]);
     };
@@ -326,9 +365,6 @@ export const SettingsApp: React.FC = () => {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("blur", onBlur);
-      if (!shortcutSavedRef.current) {
-        void invoke("set_shortcuts_paused", { paused: false });
-      }
     };
   }, [recordingField, tab, hasSettings, platform, t]);
 
@@ -337,6 +373,7 @@ export const SettingsApp: React.FC = () => {
       setRecordingField(null);
       setLiveTokens([]);
       setShortcutError(null);
+      setShortcutErrorField(null);
     }
   }, [tab, recordingField]);
 
@@ -518,6 +555,8 @@ export const SettingsApp: React.FC = () => {
       .map((p) => p.trim())
       .filter(Boolean);
     const shownTokens = isRec ? liveTokens : savedTokens;
+    const hasLiveMainKey = isRec && shownTokens.some((tok) => !isModifierToken(tok));
+    const fieldError = shortcutError && shortcutErrorField === key ? shortcutError : null;
 
     return (
       <div key={key} className="field-group">
@@ -530,6 +569,7 @@ export const SettingsApp: React.FC = () => {
           }`}
           onClick={() => {
             setShortcutError(null);
+            setShortcutErrorField(null);
             setLiveTokens([]);
             setRecordingField(isRec ? null : key);
           }}
@@ -537,6 +577,7 @@ export const SettingsApp: React.FC = () => {
             if (!isRec && (e.key === "Enter" || e.key === " ")) {
               e.preventDefault();
               setShortcutError(null);
+              setShortcutErrorField(null);
               setLiveTokens([]);
               setRecordingField(key);
             }
@@ -561,7 +602,7 @@ export const SettingsApp: React.FC = () => {
                     : t.shortcutRecordingPlaceholder}
               </span>
             )}
-            {isRec && shownTokens.length > 0 && (
+            {isRec && shownTokens.length > 0 && !hasLiveMainKey && (
               <>
                 <span className="key-plus">+</span>
                 <kbd className="keycap pending">...</kbd>
@@ -573,6 +614,12 @@ export const SettingsApp: React.FC = () => {
             {isRec ? t.shortcutCancelBtn : t.shortcutChangeBtn}
           </span>
         </div>
+        {fieldError && (
+          <div className="permission-warn-note" style={{ marginTop: 4 }}>
+            <AlertTriangle size={14} />
+            <span>{fieldError}</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -1070,6 +1117,7 @@ export const SettingsApp: React.FC = () => {
                       setRecordingField(null);
                       setLiveTokens([]);
                       setShortcutError(null);
+                      setShortcutErrorField(null);
                       setSettings({
                         ...settings,
                         ...DEFAULT_GLOBAL_SHORTCUTS,
@@ -1121,7 +1169,7 @@ export const SettingsApp: React.FC = () => {
                 </div>
               </div>
 
-              {shortcutError && (
+              {shortcutError && !shortcutErrorField && (
                 <div className="permission-warn-note">
                   <AlertTriangle size={14} />
                   <span>{shortcutError}</span>

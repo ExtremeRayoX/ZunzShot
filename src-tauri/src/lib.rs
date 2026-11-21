@@ -4,7 +4,7 @@ mod settings;
 mod splash;
 
 use arboard::{Clipboard, ImageData};
-use capture::{CaptureMetadata, CaptureSession};
+use capture::{CaptureMetadata, CaptureSession, MonitorNormalizedRect};
 use chrono::Local;
 use i18n::{tray_labels, Lang};
 use settings::{load_settings, save_settings, AppSettings};
@@ -137,10 +137,20 @@ pub struct UpdaterLaunchPayload {
     pub preview: Option<PendingUpdatePreview>,
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SwitchModePayload {
+    mode: String,
+    active_screen_index: usize,
+    active_monitor: Option<MonitorNormalizedRect>,
+}
+
 pub struct AppState {
     pub settings: AppSettings,
     pub active_session: Option<CaptureSession>,
     pub tray: Option<TrayIcon>,
+    #[cfg(target_os = "macos")]
+    pub paused_app_menu: Option<Menu<tauri::Wry>>,
     pub shortcut_modes: HashMap<u32, String>,
     pub failed_shortcuts: Vec<String>,
     pub pending_tab: Option<String>,
@@ -396,11 +406,34 @@ fn refresh_tray_menu(app: &AppHandle) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn set_macos_app_menu_suspended(app: &AppHandle, suspended: bool) {
+    let app_ui = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let state = app_ui.state::<Mutex<AppState>>();
+        if suspended {
+            let already_saved = state.lock().unwrap().paused_app_menu.is_some();
+            if !already_saved {
+                if let Ok(Some(prev_menu)) = app_ui.remove_menu() {
+                    state.lock().unwrap().paused_app_menu = Some(prev_menu);
+                }
+            }
+        } else {
+            let saved = state.lock().unwrap().paused_app_menu.take();
+            if let Some(menu) = saved {
+                let _ = app_ui.set_menu(menu);
+            }
+        }
+    });
+}
+
 fn register_shortcuts(app: &AppHandle, settings: &AppSettings) -> Vec<String> {
     let _op_guard = SHORTCUT_OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
     SHORTCUTS_PAUSED.store(false, Ordering::SeqCst);
+    #[cfg(target_os = "macos")]
+    set_macos_app_menu_suspended(app, false);
 
     if !has_screen_capture_permission() {
         let state = app.state::<Mutex<AppState>>();
@@ -769,17 +802,71 @@ fn trigger_capture(app: AppHandle, mode: String) {
         .iter()
         .any(|(_, w)| w.is_visible().unwrap_or(false))
     {
-        let active_idx_opt = app
-            .state::<Mutex<AppState>>()
-            .lock()
-            .unwrap()
-            .active_session
-            .as_ref()
-            .map(|s| s.metadata.active_screen_index);
-        if let Some(active_idx) = active_idx_opt {
+        let switch_payload_opt = {
+            let cursor_pos = app.cursor_position().ok();
+            #[cfg(not(target_os = "windows"))]
+            let mac_cursor_scale = (*LAST_MACOS_CURSOR_SCALE.lock().unwrap()).max(1.0);
+            let state = app.state::<Mutex<AppState>>();
+            let mut guard = state.lock().unwrap();
+            guard.active_session.as_mut().map(|session| {
+                if let Some(pos) = cursor_pos {
+                    #[cfg(target_os = "windows")]
+                    let (cx, cy) = (pos.x, pos.y);
+                    #[cfg(not(target_os = "windows"))]
+                    let (cx, cy) = (pos.x / mac_cursor_scale, pos.y / mac_cursor_scale);
+
+                    if let Some(mon_idx) =
+                        capture::find_monitor_index_at_point(&session.monitor_bounds, cx, cy)
+                    {
+                        if let Some(mon_rect) = session.metadata.monitors.get(mon_idx).cloned() {
+                            session.metadata.active_monitor = Some(mon_rect);
+                        }
+                        if session.metadata.screens.len() > 1 {
+                            session.metadata.active_screen_index = mon_idx;
+                        }
+                        if let Some(mb) = session.monitor_bounds.get(mon_idx) {
+                            let mut bounds_guard = LAST_MONITOR_BOUNDS.lock().unwrap();
+                            if let Some(ref mut last) = *bounds_guard {
+                                #[cfg(target_os = "windows")]
+                                {
+                                    last.phys_x = mb.x.round() as i32;
+                                    last.phys_y = mb.y.round() as i32;
+                                    last.phys_w = mb.w.round().max(1.0) as u32;
+                                    last.phys_h = mb.h.round().max(1.0) as u32;
+                                    last.scale = mb.scale.max(1.0);
+                                }
+                                #[cfg(not(target_os = "windows"))]
+                                {
+                                    let sc = mb.scale.max(1.0);
+                                    last.logical_x = mb.x;
+                                    last.logical_y = mb.y;
+                                    last.logical_w = mb.w;
+                                    last.logical_h = mb.h;
+                                    last.phys_x = (mb.x * sc).round() as i32;
+                                    last.phys_y = (mb.y * sc).round() as i32;
+                                    last.phys_w = (mb.w * sc).round().max(1.0) as u32;
+                                    last.phys_h = (mb.h * sc).round().max(1.0) as u32;
+                                    last.scale = sc;
+                                    if let Some(scr) = session.metadata.screens.get(mon_idx) {
+                                        last.display_id = scr.display_id;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                SwitchModePayload {
+                    mode: mode.clone(),
+                    active_screen_index: session.metadata.active_screen_index,
+                    active_monitor: session.metadata.active_monitor.clone(),
+                }
+            })
+        };
+        if let Some(payload) = switch_payload_opt {
+            let active_idx = payload.active_screen_index;
             for (_, ov) in &existing_overlays {
                 if ov.is_visible().unwrap_or(false) {
-                    let _ = ov.emit("zunzshot://switch-mode", &mode);
+                    let _ = ov.emit("zunzshot://switch-mode", &payload);
                 }
             }
             let target_ov = existing_overlays
@@ -1115,6 +1202,8 @@ fn set_shortcuts_paused(app: AppHandle, state: State<'_, Mutex<AppState>>, pause
         let _op_guard = SHORTCUT_OP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         SHORTCUTS_PAUSED.store(true, Ordering::SeqCst);
         let _ = app.global_shortcut().unregister_all();
+        #[cfg(target_os = "macos")]
+        set_macos_app_menu_suspended(&app, true);
     } else {
         let settings = state.lock().unwrap().settings.clone();
         register_shortcuts(&app, &settings);
@@ -3100,6 +3189,8 @@ pub fn run() {
                 settings: initial_settings.clone(),
                 active_session: None,
                 tray: None,
+                #[cfg(target_os = "macos")]
+                paused_app_menu: None,
                 shortcut_modes: HashMap::new(),
                 failed_shortcuts: Vec::new(),
                 pending_tab: None,
@@ -3258,6 +3349,18 @@ mod tests {
 
         let ctrled = Shortcut::from_str("Control+PrintScreen").expect("Control+PrintScreen");
         assert_ne!(shifted.id(), ctrled.id());
+    }
+
+    #[test]
+    fn parses_two_three_and_four_key_global_shortcuts() {
+        let two = Shortcut::from_str("Control+S").expect("2-key Control+S");
+        let three_mac = Shortcut::from_str("Command+Shift+X").expect("3-key Command+Shift+X");
+        let three_ctrl = Shortcut::from_str("Control+Shift+S").expect("3-key Control+Shift+S");
+        let three_alt = Shortcut::from_str("Control+Alt+F").expect("3-key Control+Alt+F");
+        let four = Shortcut::from_str("Command+Alt+Shift+F").expect("4-key Command+Alt+Shift+F");
+        assert_ne!(two.id(), three_ctrl.id());
+        assert_ne!(three_mac.id(), three_ctrl.id());
+        assert_ne!(three_alt.id(), four.id());
     }
 
     #[test]

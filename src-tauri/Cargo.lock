@@ -6261,7 +6261,7 @@ dependencies = [
 
 [[package]]
 name = "zunzshot"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "arboard",
  "chrono",

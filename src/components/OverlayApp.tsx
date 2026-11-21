@@ -58,6 +58,7 @@ import type {
   CaptureMode,
   ClockSticker,
   ClockStickerStyle,
+  MonitorRect,
   OverlayItem,
   PhotoMaskShape,
   PhotoSticker,
@@ -274,6 +275,86 @@ interface GlobalDragPointPayload {
   vy: number;
 }
 
+interface SwitchModePayload {
+  mode: CaptureMode;
+  activeScreenIndex?: number;
+  activeMonitor?: MonitorRect | null;
+}
+
+function getFullscreenSelection(
+  meta: CaptureMetadata | null,
+  virtW: number,
+  virtH: number,
+  preferredScreenIndex?: number
+): SelectionBox {
+  if (meta?.screens && meta.screens.length > 1) {
+    const targetIdx = preferredScreenIndex ?? meta.activeScreenIndex ?? 0;
+    const scr =
+      meta.screens.find((s) => s.index === targetIdx) ?? meta.screens[0];
+    if (scr) {
+      return {
+        x: scr.lx,
+        y: scr.ly,
+        w: Math.max(1, scr.lw),
+        h: Math.max(1, scr.lh),
+        shape: "rect",
+      };
+    }
+  }
+
+  const mon = meta?.activeMonitor;
+  if (mon && mon.rw > 0 && mon.rh > 0) {
+    const x = Math.round(mon.rx * virtW);
+    const y = Math.round(mon.ry * virtH);
+    const right = Math.round((mon.rx + mon.rw) * virtW);
+    const bottom = Math.round((mon.ry + mon.rh) * virtH);
+    return {
+      x,
+      y,
+      w: Math.max(1, right - x),
+      h: Math.max(1, bottom - y),
+      shape: "rect",
+    };
+  }
+
+  return {
+    x: 0,
+    y: 0,
+    w: Math.max(1, virtW),
+    h: Math.max(1, virtH),
+    shape: "rect",
+  };
+}
+
+function resolveMonitorDockBounds(
+  selLeft: number,
+  selTop: number,
+  selRight: number,
+  selBottom: number,
+  viewportW: number,
+  viewportH: number,
+  isMultiScreen: boolean,
+  monitors?: MonitorRect[]
+): { left: number; top: number; right: number; bottom: number } {
+  if (!isMultiScreen && monitors && monitors.length > 1) {
+    for (const m of monitors) {
+      const mLeft = Math.round(m.rx * viewportW);
+      const mTop = Math.round(m.ry * viewportH);
+      const mRight = Math.round((m.rx + m.rw) * viewportW);
+      const mBottom = Math.round((m.ry + m.rh) * viewportH);
+      if (
+        selLeft >= mLeft - 2 &&
+        selRight <= mRight + 2 &&
+        selTop >= mTop - 2 &&
+        selBottom <= mBottom + 2
+      ) {
+        return { left: mLeft, top: mTop, right: mRight, bottom: mBottom };
+      }
+    }
+  }
+  return { left: 0, top: 0, right: viewportW, bottom: viewportH };
+}
+
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -379,6 +460,8 @@ export const OverlayApp: React.FC = () => {
 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [metadata, setMetadata] = useState<CaptureMetadata | null>(null);
+  const metadataRef = useRef<CaptureMetadata | null>(null);
+  metadataRef.current = metadata;
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [sessionReady, setSessionReady] = useState<boolean>(false);
   const [ownerScreenIndex, setOwnerScreenIndex] = useState<number>(0);
@@ -750,7 +833,7 @@ export const OverlayApp: React.FC = () => {
       if (meta.mode === "fullscreen") {
         const fullW = meta.screens && meta.screens.length > 1 ? Math.max(1, meta.logicalWidth) : vw;
         const fullH = meta.screens && meta.screens.length > 1 ? Math.max(1, meta.logicalHeight) : vh;
-        updateSelection({ x: 0, y: 0, w: fullW, h: fullH, shape: "rect" });
+        updateSelection(getFullscreenSelection(meta, fullW, fullH, initialOwner));
       } else {
         updateSelection(null);
       }
@@ -785,13 +868,40 @@ export const OverlayApp: React.FC = () => {
     const unlistenFocus = listen("zunzshot://focus-canvas", () => {
       focusOverlayCanvas();
     });
-    const unlistenSwitchMode = listen<CaptureMode>(
+    const unlistenSwitchMode = listen<CaptureMode | SwitchModePayload>(
       "zunzshot://switch-mode",
       (ev) => {
-        const nextMode = ev.payload;
+        const rawPayload = ev.payload;
+        const nextMode: CaptureMode =
+          typeof rawPayload === "string" ? rawPayload : rawPayload.mode;
+        const payloadScreenIdx =
+          typeof rawPayload === "string" ? undefined : rawPayload.activeScreenIndex;
+        const payloadActiveMonitor =
+          typeof rawPayload === "string" ? undefined : rawPayload.activeMonitor;
         if (!sessionOpenRef.current) {
           void loadActiveSession(true);
           return;
+        }
+        let nextMeta = metadataRef.current;
+        if (
+          nextMeta &&
+          (payloadScreenIdx !== undefined || payloadActiveMonitor !== undefined)
+        ) {
+          nextMeta = {
+            ...nextMeta,
+            ...(payloadScreenIdx !== undefined
+              ? { activeScreenIndex: payloadScreenIdx }
+              : {}),
+            ...(payloadActiveMonitor
+              ? { activeMonitor: payloadActiveMonitor }
+              : {}),
+          };
+          metadataRef.current = nextMeta;
+          setMetadata(nextMeta);
+        }
+        if (payloadScreenIdx !== undefined) {
+          setOwnerScreenIndex(payloadScreenIdx);
+          ownerScreenRef.current = payloadScreenIdx;
         }
         setCaptureMode(nextMode);
         setTextInput(null);
@@ -801,7 +911,8 @@ export const OverlayApp: React.FC = () => {
 
         if (nextMode === "fullscreen") {
           const vs = virtSizeRef.current;
-          updateSelection({ x: 0, y: 0, w: vs.w, h: vs.h, shape: "rect" });
+          const targetIdx = payloadScreenIdx ?? ownerScreenRef.current;
+          updateSelection(getFullscreenSelection(nextMeta, vs.w, vs.h, targetIdx));
           setActiveTool("select");
         } else if (itemsCountRef.current === 0) {
           updateSelection(null);
@@ -2555,10 +2666,6 @@ export const OverlayApp: React.FC = () => {
     }
     const MARGIN = 8;
     const GAP = 8;
-    const hW = Math.min(dockSize.w, Math.max(200, viewport.w - MARGIN * 2));
-    const hH = dockSize.h;
-    const vW = actionsDockSize.w;
-    const vH = actionsDockSize.h;
     const selLeft = Math.max(0, Math.min(viewport.w, selection.x - myScreen.lx));
     const selTop = Math.max(0, Math.min(viewport.h, selection.y - myScreen.ly));
     const selRight = Math.max(
@@ -2569,53 +2676,71 @@ export const OverlayApp: React.FC = () => {
       selTop,
       Math.min(viewport.h, selection.y + selection.h - myScreen.ly)
     );
+    const bounds = resolveMonitorDockBounds(
+      selLeft,
+      selTop,
+      selRight,
+      selBottom,
+      viewport.w,
+      viewport.h,
+      isMultiScreen,
+      metadata?.monitors
+    );
+    const boundW = Math.max(1, bounds.right - bounds.left);
+    const hW = Math.min(dockSize.w, Math.max(200, boundW - MARGIN * 2));
+    const hH = dockSize.h;
+    const vW = actionsDockSize.w;
+    const vH = actionsDockSize.h;
 
     // 1. Horizontal tools bar (Y: outside below -> outside above -> inside bottom)
     let hTop: number;
     let hInsideBottom = false;
-    if (selBottom + GAP + hH <= viewport.h - MARGIN) {
+    if (selBottom + GAP + hH <= bounds.bottom - MARGIN) {
       hTop = selBottom + GAP;
-    } else if (selTop - GAP - hH >= MARGIN) {
+    } else if (selTop - GAP - hH >= bounds.top + MARGIN) {
       hTop = selTop - GAP - hH;
     } else {
       hInsideBottom = true;
       hTop = Math.min(
-        viewport.h - hH - MARGIN,
-        Math.max(MARGIN, selBottom - hH - MARGIN)
+        bounds.bottom - hH - MARGIN,
+        Math.max(bounds.top + MARGIN, selBottom - hH - MARGIN)
       );
     }
 
     let hLeft = selRight - hW;
-    if (hLeft < MARGIN) hLeft = Math.max(MARGIN, selLeft);
-    hLeft = Math.max(MARGIN, Math.min(hLeft, viewport.w - hW - MARGIN));
+    if (hLeft < bounds.left + MARGIN) hLeft = Math.max(bounds.left + MARGIN, selLeft);
+    hLeft = Math.max(bounds.left + MARGIN, Math.min(hLeft, bounds.right - hW - MARGIN));
 
     // 2. Vertical actions bar (X: outside right -> outside left -> inside right)
     let vLeft: number;
     let vInsideRight = false;
-    if (selRight + GAP + vW <= viewport.w - MARGIN) {
+    if (selRight + GAP + vW <= bounds.right - MARGIN) {
       vLeft = selRight + GAP;
-    } else if (selLeft - GAP - vW >= MARGIN) {
+    } else if (selLeft - GAP - vW >= bounds.left + MARGIN) {
       vLeft = selLeft - GAP - vW;
     } else {
       vInsideRight = true;
       vLeft = Math.min(
-        viewport.w - vW - MARGIN,
-        Math.max(MARGIN, selRight - vW - MARGIN)
+        bounds.right - vW - MARGIN,
+        Math.max(bounds.left + MARGIN, selRight - vW - MARGIN)
       );
     }
 
     // Anchor bottom of vertical bar cleanly at the selection corner (or just above inside horizontal dock)
     let vTop: number;
     if (hInsideBottom) {
-      vTop = Math.max(MARGIN, hTop - GAP - vH);
+      vTop = Math.max(bounds.top + MARGIN, hTop - GAP - vH);
     } else if (hTop >= selBottom) {
-      vTop = Math.max(MARGIN, Math.min(selBottom - vH, hTop - GAP - vH));
+      vTop = Math.max(bounds.top + MARGIN, Math.min(selBottom - vH, hTop - GAP - vH));
     } else {
-      vTop = Math.max(MARGIN, selBottom - vH);
+      vTop = Math.max(bounds.top + MARGIN, selBottom - vH);
     }
 
     if (hInsideBottom && vInsideRight) {
-      hLeft = Math.max(MARGIN, Math.min(vLeft + vW - hW, viewport.w - hW - MARGIN));
+      hLeft = Math.max(
+        bounds.left + MARGIN,
+        Math.min(vLeft + vW - hW, bounds.right - hW - MARGIN)
+      );
     }
 
     // 3. Ensure zero overlap on extreme narrow/corner selections
@@ -2626,24 +2751,25 @@ export const OverlayApp: React.FC = () => {
       hTop + hH + 6 > vTop;
 
     if (overlaps) {
-      if (vLeft - GAP - hW >= MARGIN) {
+      if (vLeft - GAP - hW >= bounds.left + MARGIN) {
         hLeft = vLeft - GAP - hW;
-      } else if (vLeft + vW + GAP + hW <= viewport.w - MARGIN) {
+      } else if (vLeft + vW + GAP + hW <= bounds.right - MARGIN) {
         hLeft = vLeft + vW + GAP;
-      } else if (hTop - GAP - vH >= MARGIN) {
+      } else if (hTop - GAP - vH >= bounds.top + MARGIN) {
         vTop = hTop - GAP - vH;
-      } else if (hTop + hH + GAP + vH <= viewport.h - MARGIN) {
+      } else if (hTop + hH + GAP + vH <= bounds.bottom - MARGIN) {
         vTop = hTop + hH + GAP;
       }
     }
 
-    const spaceBelow = viewport.h - (hTop + hH) - MARGIN;
-    const spaceAbove = hTop - MARGIN;
+    const spaceBelow = bounds.bottom - (hTop + hH) - MARGIN;
+    const spaceAbove = hTop - bounds.top - MARGIN;
     const popUpwards =
       spaceBelow < 175
         ? spaceAbove >= spaceBelow
         : hTop + hH <= selTop && spaceAbove >= 175;
-    const popAlignRight = hLeft + hW >= Math.min(390, viewport.w - MARGIN);
+    const popAlignRight =
+      hLeft + hW - bounds.left >= Math.min(390, boundW - MARGIN);
 
     return { hLeft, hTop, vLeft, vTop, popUpwards, popAlignRight };
   }, [
@@ -2653,6 +2779,7 @@ export const OverlayApp: React.FC = () => {
     viewport,
     myScreen.lx,
     myScreen.ly,
+    metadata?.monitors,
     dockSize,
     actionsDockSize,
   ]);
@@ -2930,11 +3057,30 @@ export const OverlayApp: React.FC = () => {
     if (!selection) return { left: 10, top: 10 };
     const sx = Math.max(0, Math.min(viewport.w - 140, selection.x - myScreen.lx));
     const sy = Math.max(0, Math.min(viewport.h, selection.y - myScreen.ly));
+    const bounds = resolveMonitorDockBounds(
+      sx,
+      sy,
+      Math.max(sx, Math.min(viewport.w, selection.x + selection.w - myScreen.lx)),
+      Math.max(sy, Math.min(viewport.h, selection.y + selection.h - myScreen.ly)),
+      viewport.w,
+      viewport.h,
+      isMultiScreen,
+      metadata?.monitors
+    );
+    const nearTop = sy - bounds.top < 36;
     return {
-      left: Math.max(10, sx + (sy < 36 ? 10 : 0)),
-      top: sy >= 36 ? sy - 28 : Math.min(viewport.h - 32, sy + 10),
+      left: Math.max(bounds.left + 10, sx + (nearTop ? 10 : 0)),
+      top: nearTop ? Math.min(bounds.bottom - 32, sy + 10) : sy - 28,
     };
-  }, [selection, myScreen.lx, myScreen.ly, viewport.w, viewport.h]);
+  }, [
+    selection,
+    myScreen.lx,
+    myScreen.ly,
+    viewport.w,
+    viewport.h,
+    isMultiScreen,
+    metadata?.monitors,
+  ]);
 
   // Measure clock sticker warning silence
   void measureClockSticker;
@@ -3032,13 +3178,14 @@ export const OverlayApp: React.FC = () => {
               onClick={() => {
                 setCaptureMode("fullscreen");
                 setLoupeInfo(null);
-                updateSelection({
-                  x: 0,
-                  y: 0,
-                  w: virtSize.w,
-                  h: virtSize.h,
-                  shape: "rect",
-                });
+                updateSelection(
+                  getFullscreenSelection(
+                    metadata,
+                    virtSize.w,
+                    virtSize.h,
+                    isMultiScreen ? CURRENT_SCREEN_INDEX : ownerScreenIndex
+                  )
+                );
               }}
             >
               <Maximize2 size={14} /> {t.modeFullscreen}
@@ -3879,13 +4026,16 @@ export const OverlayApp: React.FC = () => {
           >
             <div ref={actionsDockRef} className="dock-bar-vertical">
               <button
-                className="action-btn primary icon-only"
-                onClick={() => void handleCopy()}
-                aria-label={t.overlay.copy}
-                {...tipProps("copy", "vertical")}
+                className="action-btn danger icon-only"
+                onClick={() => void handleClose()}
+                aria-label={t.overlay.cancel}
+                {...tipProps("cancel", "vertical")}
               >
-                <Copy size={14} />
+                <X size={14} />
               </button>
+
+              <span className="dock-sep-h" />
+
               <button
                 className="action-btn icon-only"
                 onClick={() => void handleSave()}
@@ -3919,16 +4069,13 @@ export const OverlayApp: React.FC = () => {
               >
                 <Printer size={14} />
               </button>
-
-              <span className="dock-sep-h" />
-
               <button
-                className="action-btn danger icon-only"
-                onClick={() => void handleClose()}
-                aria-label={t.overlay.cancel}
-                {...tipProps("cancel", "vertical")}
+                className="action-btn primary icon-only"
+                onClick={() => void handleCopy()}
+                aria-label={t.overlay.copy}
+                {...tipProps("copy", "vertical")}
               >
-                <X size={14} />
+                <Copy size={14} />
               </button>
             </div>
           </div>
